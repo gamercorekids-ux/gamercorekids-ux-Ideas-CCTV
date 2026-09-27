@@ -84,25 +84,27 @@ export default function App() {
         api.fetchDbStatus()
       ]);
 
-      setDepartments(deptsRes);
-      setRegions(regsRes);
-      setLocations(locsRes);
-      setUsers(usersRes);
-      setTickets(ticketsRes);
-      setSlaRules(slaRes);
-      setAuditLogs(auditRes);
-      setSettings(settingsRes);
-      setDbStatus(statusRes);
+      setDepartments(Array.isArray(deptsRes) ? deptsRes : []);
+      setRegions(Array.isArray(regsRes) ? regsRes : []);
+      setLocations(Array.isArray(locsRes) ? locsRes : []);
+      setUsers(Array.isArray(usersRes) ? usersRes : []);
+      setTickets(Array.isArray(ticketsRes) ? ticketsRes : []);
+      setSlaRules(Array.isArray(slaRes) ? slaRes : []);
+      setAuditLogs(Array.isArray(auditRes) ? auditRes : []);
+      if (settingsRes) setSettings(settingsRes);
+      if (statusRes) setDbStatus(statusRes);
 
       // Keep currentUser synced
-      const matched = usersRes.find(u => u.id === currentUser.id);
-      if (matched) {
-        setCurrentUser(matched);
-      } else if (usersRes.length > 0) {
-        setCurrentUser(usersRes[0]);
+      if (Array.isArray(usersRes)) {
+        const matched = usersRes.find(u => u.id === currentUser.id);
+        if (matched) {
+          setCurrentUser(matched);
+        } else if (usersRes.length > 0) {
+          setCurrentUser(usersRes[0]);
+        }
       }
-    } catch (err) {
-      console.error('Error fetching data from API:', err);
+    } catch {
+      // Gracefully continue with available state
     } finally {
       setLoading(false);
     }

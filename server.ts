@@ -316,6 +316,11 @@ app.post('/api/auth/verify-password', (req: Request, res: Response) => {
   return res.status(401).json({ verified: false, error: 'Administrative password verification failed' });
 });
 
+// 404 handler for unknown API routes
+app.all('/api/*', (req: Request, res: Response) => {
+  res.status(404).json({ error: `API route not found: ${req.method} ${req.url}` });
+});
+
 // ============================================================================
 // VITE INTEGRATION (DEV & PROD)
 // ============================================================================
@@ -329,6 +334,20 @@ async function startServer() {
       server: { middlewareMode: true }
     });
     app.use(vite.middlewares);
+
+    // Serve transformed index.html for non-API SPA routes
+    app.use('*', async (req: Request, res: Response, next) => {
+      const url = req.originalUrl;
+      try {
+        const indexPath = path.resolve(process.cwd(), 'index.html');
+        let template = fs.readFileSync(indexPath, 'utf-8');
+        template = await vite.transformIndexHtml(url, template);
+        res.status(200).set({ 'Content-Type': 'text/html' }).end(template);
+      } catch (e: any) {
+        vite.ssrFixStacktrace(e);
+        next(e);
+      }
+    });
   } else {
     // Production static files
     const distPath = path.resolve(process.cwd(), 'dist');

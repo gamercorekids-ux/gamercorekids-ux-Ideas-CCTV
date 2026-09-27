@@ -2,6 +2,7 @@
 import express from "express";
 import cors from "cors";
 import path2 from "path";
+import fs2 from "fs";
 
 // server/db.ts
 import mysql from "mysql2/promise";
@@ -1267,6 +1268,9 @@ app.post("/api/auth/verify-password", (req, res) => {
   }
   return res.status(401).json({ verified: false, error: "Administrative password verification failed" });
 });
+app.all("/api/*", (req, res) => {
+  res.status(404).json({ error: `API route not found: ${req.method} ${req.url}` });
+});
 async function startServer() {
   const isProd = process.env.NODE_ENV === "production";
   if (!isProd) {
@@ -1275,6 +1279,18 @@ async function startServer() {
       server: { middlewareMode: true }
     });
     app.use(vite.middlewares);
+    app.use("*", async (req, res, next) => {
+      const url = req.originalUrl;
+      try {
+        const indexPath = path2.resolve(process.cwd(), "index.html");
+        let template = fs2.readFileSync(indexPath, "utf-8");
+        template = await vite.transformIndexHtml(url, template);
+        res.status(200).set({ "Content-Type": "text/html" }).end(template);
+      } catch (e) {
+        vite.ssrFixStacktrace(e);
+        next(e);
+      }
+    });
   } else {
     const distPath = path2.resolve(process.cwd(), "dist");
     app.use(express.static(distPath));
