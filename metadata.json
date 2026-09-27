@@ -1,0 +1,6 @@
+{
+  "name": "OpsDesk - Multi-Department Ticketing & Operations Portal",
+  "description": "Enterprise ticketing and operations management portal for Surveillance, Security, Admin, and HVAC with real-time telemetry, RBAC governance, SLA engine, and Hostinger MySQL database integration.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
