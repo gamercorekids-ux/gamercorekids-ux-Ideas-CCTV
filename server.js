@@ -1,4 +1,5 @@
 // server.ts
+import dotenv from "dotenv";
 import express from "express";
 import cors from "cors";
 import path2 from "path";
@@ -562,11 +563,11 @@ var INITIAL_SETTINGS = {
     }
   },
   mysql: {
-    host: process.env.MYSQL_HOST || "localhost",
-    port: Number(process.env.MYSQL_PORT) || 3306,
-    user: process.env.MYSQL_USER || "u123456789_opsdesk",
-    password: process.env.MYSQL_PASSWORD || "",
-    database: process.env.MYSQL_DATABASE || "u123456789_ticketing",
+    host: process.env.MYSQL_HOST || process.env.DB_HOST || "localhost",
+    port: Number(process.env.MYSQL_PORT || process.env.DB_PORT) || 3306,
+    user: process.env.MYSQL_USER || process.env.DB_USER || "u123456789_opsdesk",
+    password: process.env.MYSQL_PASSWORD || process.env.DB_PASSWORD || "",
+    database: process.env.MYSQL_DATABASE || process.env.DB_NAME || "u123456789_ticketing",
     ssl: process.env.MYSQL_SSL === "true"
   }
 };
@@ -587,21 +588,31 @@ var DatabaseManager = class {
     this.settings = JSON.parse(JSON.stringify(INITIAL_SETTINGS));
     this.initMySQL();
   }
+  async runQuery(sql, params = []) {
+    if (!this.pool || !this.isConnectedToMySQL) return null;
+    try {
+      return await this.pool.execute(sql, params);
+    } catch (err) {
+      console.warn(`[Database MySQL Query Note]: ${err.message}`);
+      return null;
+    }
+  }
   async initMySQL(customConfig) {
     const config = customConfig || this.settings.mysql;
-    if (config.host && config.password) {
+    if (config.host && config.password !== void 0) {
       try {
         const startTime = Date.now();
         const testPool = mysql.createPool({
           host: config.host,
-          port: config.port || 3306,
+          port: Number(config.port) || 3306,
           user: config.user,
           password: config.password,
           database: config.database,
           waitForConnections: true,
           connectionLimit: 10,
           queueLimit: 0,
-          connectTimeout: 5e3
+          connectTimeout: 5e3,
+          ssl: config.ssl ? { rejectUnauthorized: false } : void 0
         });
         const conn = await testPool.getConnection();
         await conn.ping();
@@ -612,6 +623,7 @@ var DatabaseManager = class {
         this.latencyMs = Math.max(12, Date.now() - startTime);
         console.log(`[Database] Successfully connected to Hostinger MySQL (${config.host}:${config.port}/${config.database}) in ${this.latencyMs}ms`);
         await this.ensureTables();
+        await this.seedAndSync();
       } catch (err) {
         this.isConnectedToMySQL = false;
         this.connectionError = err.message || "Connection failed";
@@ -626,7 +638,7 @@ var DatabaseManager = class {
     if (!this.pool) return;
     try {
       const [rows] = await this.pool.query("SHOW TABLES LIKE 'tickets'");
-      if (rows.length === 0) {
+      if (!rows || rows.length === 0) {
         console.log("[Database] Initializing MySQL tables on Hostinger...");
         const schemaPath = path.resolve(process.cwd(), "database/schema.sql");
         if (fs.existsSync(schemaPath)) {
@@ -635,13 +647,90 @@ var DatabaseManager = class {
           for (const stmt of statements) {
             try {
               await this.pool.query(stmt);
-            } catch (e) {
+            } catch {
             }
           }
         }
       }
     } catch (e) {
       console.warn("[Database] ensureTables notice:", e.message);
+    }
+  }
+  async seedAndSync() {
+    if (!this.pool) return;
+    try {
+      const [locRows] = await this.pool.query("SELECT COUNT(*) as count FROM locations");
+      const locCount = locRows?.[0]?.count || 0;
+      if (locCount === 0) {
+        console.log("[Database] Hostinger MySQL tables are empty. Seeding initial master data...");
+        for (const d of this.departments) {
+          await this.runQuery(
+            "INSERT IGNORE INTO departments (id, code, name, description, is_primary, status) VALUES (?, ?, ?, ?, ?, ?)",
+            [d.id, d.code, d.name, d.description, d.is_primary ? 1 : 0, d.status]
+          );
+        }
+        for (const r of this.regions) {
+          await this.runQuery(
+            "INSERT IGNORE INTO regions (id, name, code, status) VALUES (?, ?, ?, ?)",
+            [r.id, r.name, r.code, r.status]
+          );
+        }
+        for (const l of this.locations) {
+          await this.runQuery(
+            "INSERT IGNORE INTO locations (id, branch_code, name, region_id, region_name, physical_address, contact_person, phone, notification_email, camera_zones, areas_details, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [l.id, l.branch_code, l.name, l.region_id, l.region_name, l.physical_address, l.contact_person, l.phone, l.notification_email, l.camera_zones, l.areas_details, l.status]
+          );
+        }
+        for (const u of this.users) {
+          await this.runQuery(
+            "INSERT IGNORE INTO users (id, name, email, password_hash, department_id, department_name, role, status, avatar_initials, workload_status, granular_rights) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [u.id, u.name, u.email, u.password_hash, u.department_id, u.department_name, u.role, u.status, u.avatar_initials, u.workload_status, JSON.stringify(u.granular_rights)]
+          );
+        }
+        for (const s of this.slaRules) {
+          await this.runQuery(
+            "INSERT IGNORE INTO sla_rules (id, priority_tier, category_domain, department, response_sla_minutes, resolution_sla_hours, escalation_trigger_hours, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            [s.id, s.priority_tier, s.category_domain, s.department, s.response_sla_minutes, s.resolution_sla_hours, s.escalation_trigger_hours, s.status]
+          );
+        }
+        for (const t of this.tickets) {
+          await this.runQuery(
+            "INSERT IGNORE INTO tickets (id, ticket_number, subject, description, department_id, department_name, category, priority, status, assigned_technician_id, assigned_technician_name, location_id, location_name, region_name, sla_deadline, sla_status, sla_remaining_hours, evidence_images, created_by_user_id, created_by_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [t.id, t.ticket_number, t.subject, t.description, t.department_id, t.department_name, t.category, t.priority, t.status, t.assigned_technician_id, t.assigned_technician_name, t.location_id, t.location_name, t.region_name, t.sla_deadline ? new Date(t.sla_deadline) : null, t.sla_status, t.sla_remaining_hours, JSON.stringify(t.evidence_images || []), t.created_by_user_id, t.created_by_name]
+          );
+        }
+        console.log("[Database] Hostinger MySQL initial seeding completed.");
+      } else {
+        const [depts] = await this.pool.query("SELECT * FROM departments ORDER BY is_primary DESC, name ASC");
+        if (depts && depts.length > 0) {
+          this.departments = depts.map((d) => ({ ...d, is_primary: Boolean(d.is_primary) }));
+        }
+        const [regs] = await this.pool.query("SELECT * FROM regions ORDER BY name ASC");
+        if (regs && regs.length > 0) {
+          this.regions = regs;
+        }
+        const [locs] = await this.pool.query("SELECT * FROM locations ORDER BY name ASC");
+        if (locs && locs.length > 0) {
+          this.locations = locs;
+        }
+        const [usrs] = await this.pool.query("SELECT * FROM users ORDER BY name ASC");
+        if (usrs && usrs.length > 0) {
+          this.users = usrs.map((u) => ({
+            ...u,
+            granular_rights: typeof u.granular_rights === "string" ? JSON.parse(u.granular_rights) : u.granular_rights || []
+          }));
+        }
+        const [tix] = await this.pool.query("SELECT * FROM tickets ORDER BY created_at DESC");
+        if (tix && tix.length > 0) {
+          this.tickets = tix.map((t) => ({
+            ...t,
+            sla_remaining_hours: Number(t.sla_remaining_hours),
+            evidence_images: typeof t.evidence_images === "string" ? JSON.parse(t.evidence_images) : t.evidence_images || []
+          }));
+        }
+      }
+    } catch (err) {
+      console.warn("[Database seedAndSync notice]:", err.message);
     }
   }
   getStatus() {
@@ -671,17 +760,26 @@ var DatabaseManager = class {
   }
   addDepartment(dept) {
     this.departments.push(dept);
+    this.runQuery(
+      "INSERT INTO departments (id, code, name, description, is_primary, status) VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE name=VALUES(name)",
+      [dept.id, dept.code, dept.name, dept.description || "", dept.is_primary ? 1 : 0, dept.status || "active"]
+    );
     return dept;
   }
   updateDepartment(id, updates) {
     const idx = this.departments.findIndex((d) => d.id === id);
     if (idx === -1) return null;
     this.departments[idx] = { ...this.departments[idx], ...updates };
+    this.runQuery(
+      "UPDATE departments SET name=COALESCE(?, name), description=COALESCE(?, description), status=COALESCE(?, status) WHERE id=?",
+      [updates.name || null, updates.description || null, updates.status || null, id]
+    );
     return this.departments[idx];
   }
   deleteDepartment(id) {
     const initialLen = this.departments.length;
     this.departments = this.departments.filter((d) => d.id !== id);
+    this.runQuery("DELETE FROM departments WHERE id=?", [id]);
     return this.departments.length < initialLen;
   }
   // --- Regions & Locations ---
@@ -693,17 +791,26 @@ var DatabaseManager = class {
   }
   addRegion(region) {
     this.regions.push(region);
+    this.runQuery(
+      "INSERT INTO regions (id, name, code, status) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE name=VALUES(name)",
+      [region.id, region.name, region.code, region.status || "ACTIVE"]
+    );
     return region;
   }
   updateRegion(id, updates) {
     const idx = this.regions.findIndex((r) => r.id === id);
     if (idx === -1) return null;
     this.regions[idx] = { ...this.regions[idx], ...updates };
+    this.runQuery(
+      "UPDATE regions SET name=COALESCE(?, name), status=COALESCE(?, status) WHERE id=?",
+      [updates.name || null, updates.status || null, id]
+    );
     return this.regions[idx];
   }
   deleteRegion(id) {
     const initialLen = this.regions.length;
     this.regions = this.regions.filter((r) => r.id !== id);
+    this.runQuery("DELETE FROM regions WHERE id=?", [id]);
     return this.regions.length < initialLen;
   }
   getLocations() {
@@ -714,17 +821,26 @@ var DatabaseManager = class {
   }
   addLocation(loc) {
     this.locations.unshift(loc);
+    this.runQuery(
+      "INSERT INTO locations (id, branch_code, name, region_id, region_name, physical_address, contact_person, phone, notification_email, camera_zones, areas_details, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE name=VALUES(name)",
+      [loc.id, loc.branch_code, loc.name, loc.region_id, loc.region_name, loc.physical_address, loc.contact_person, loc.phone, loc.notification_email, loc.camera_zones, loc.areas_details, loc.status]
+    );
     return loc;
   }
   updateLocation(id, updates) {
     const idx = this.locations.findIndex((l) => l.id === id);
     if (idx === -1) return null;
     this.locations[idx] = { ...this.locations[idx], ...updates };
+    this.runQuery(
+      "UPDATE locations SET name=COALESCE(?, name), contact_person=COALESCE(?, contact_person), phone=COALESCE(?, phone), status=COALESCE(?, status) WHERE id=?",
+      [updates.name || null, updates.contact_person || null, updates.phone || null, updates.status || null, id]
+    );
     return this.locations[idx];
   }
   deleteLocation(id) {
     const initialLen = this.locations.length;
     this.locations = this.locations.filter((l) => l.id !== id);
+    this.runQuery("DELETE FROM locations WHERE id=?", [id]);
     return this.locations.length < initialLen;
   }
   // --- Users & Teams ---
@@ -744,17 +860,26 @@ var DatabaseManager = class {
   }
   addUser(user) {
     this.users.push(user);
+    this.runQuery(
+      "INSERT INTO users (id, name, email, password_hash, department_id, department_name, role, status, avatar_initials, workload_status, granular_rights) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE name=VALUES(name)",
+      [user.id, user.name, user.email, user.password_hash, user.department_id, user.department_name, user.role, user.status, user.avatar_initials, user.workload_status, JSON.stringify(user.granular_rights)]
+    );
     return user;
   }
   updateUser(id, updates) {
     const idx = this.users.findIndex((u) => u.id === id);
     if (idx === -1) return null;
     this.users[idx] = { ...this.users[idx], ...updates };
+    this.runQuery(
+      "UPDATE users SET name=COALESCE(?, name), role=COALESCE(?, role), status=COALESCE(?, status) WHERE id=?",
+      [updates.name || null, updates.role || null, updates.status || null, id]
+    );
     return this.users[idx];
   }
   deleteUser(id) {
     const initialLen = this.users.length;
     this.users = this.users.filter((u) => u.id !== id);
+    this.runQuery("DELETE FROM users WHERE id=?", [id]);
     return this.users.length < initialLen;
   }
   // --- SLA Policies ---
@@ -765,6 +890,10 @@ var DatabaseManager = class {
     const idx = this.slaRules.findIndex((r) => r.id === id);
     if (idx === -1) return null;
     this.slaRules[idx] = { ...this.slaRules[idx], ...updates };
+    this.runQuery(
+      "UPDATE sla_rules SET response_sla_minutes=COALESCE(?, response_sla_minutes), resolution_sla_hours=COALESCE(?, resolution_sla_hours), status=COALESCE(?, status) WHERE id=?",
+      [updates.response_sla_minutes ?? null, updates.resolution_sla_hours ?? null, updates.status || null, id]
+    );
     return this.slaRules[idx];
   }
   // --- Tickets ---
@@ -814,6 +943,31 @@ var DatabaseManager = class {
       comments: []
     };
     this.tickets.unshift(newTicket);
+    this.runQuery(
+      "INSERT INTO tickets (id, ticket_number, subject, description, department_id, department_name, category, priority, status, assigned_technician_id, assigned_technician_name, location_id, location_name, region_name, sla_deadline, sla_status, sla_remaining_hours, evidence_images, created_by_user_id, created_by_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      [
+        newTicket.id,
+        newTicket.ticket_number,
+        newTicket.subject,
+        newTicket.description,
+        newTicket.department_id,
+        newTicket.department_name,
+        newTicket.category,
+        newTicket.priority,
+        newTicket.status,
+        newTicket.assigned_technician_id,
+        newTicket.assigned_technician_name,
+        newTicket.location_id,
+        newTicket.location_name,
+        newTicket.region_name,
+        new Date(newTicket.sla_deadline),
+        newTicket.sla_status,
+        newTicket.sla_remaining_hours,
+        JSON.stringify(newTicket.evidence_images || []),
+        newTicket.created_by_user_id,
+        newTicket.created_by_name
+      ]
+    );
     this.addAuditLog({
       id: `id-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       timestamp: now.toISOString(),
@@ -863,6 +1017,20 @@ var DatabaseManager = class {
       updatedTicket.sla_status = "COMPLETED";
     }
     this.tickets[idx] = updatedTicket;
+    this.runQuery(
+      "UPDATE tickets SET subject=COALESCE(?, subject), status=COALESCE(?, status), priority=COALESCE(?, priority), assigned_technician_id=?, assigned_technician_name=?, sla_status=COALESCE(?, sla_status), resolved_at=?, closed_at=?, updated_at=NOW() WHERE id=?",
+      [
+        updatedTicket.subject,
+        updatedTicket.status,
+        updatedTicket.priority,
+        updatedTicket.assigned_technician_id,
+        updatedTicket.assigned_technician_name,
+        updatedTicket.sla_status,
+        updatedTicket.resolved_at ? new Date(updatedTicket.resolved_at) : null,
+        updatedTicket.closed_at ? new Date(updatedTicket.closed_at) : null,
+        id
+      ]
+    );
     if (updates.status && updates.status !== oldTicket.status) {
       this.addAuditLog({
         id: `id-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
@@ -905,6 +1073,7 @@ var DatabaseManager = class {
     const ticket = this.tickets.find((t) => t.id === id);
     if (!ticket) return false;
     this.tickets = this.tickets.filter((t) => t.id !== id);
+    this.runQuery("DELETE FROM tickets WHERE id=?", [id]);
     this.addAuditLog({
       id: `id-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       timestamp: (/* @__PURE__ */ new Date()).toISOString(),
@@ -939,6 +1108,20 @@ var DatabaseManager = class {
     };
     if (!ticket.comments) ticket.comments = [];
     ticket.comments.push(newComment);
+    this.runQuery(
+      "INSERT INTO ticket_comments (id, ticket_id, user_id, user_name, user_role, comment, attachments, is_internal, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      [
+        newComment.id,
+        newComment.ticket_id,
+        newComment.user_id,
+        newComment.user_name,
+        newComment.user_role,
+        newComment.comment,
+        JSON.stringify(newComment.attachments || []),
+        newComment.is_internal ? 1 : 0,
+        new Date(newComment.created_at)
+      ]
+    );
     return newComment;
   }
   // --- Audit Trail ---
@@ -948,6 +1131,25 @@ var DatabaseManager = class {
   }
   addAuditLog(entry) {
     this.auditLogs.unshift(entry);
+    this.runQuery(
+      "INSERT INTO audit_logs (id, timestamp, scope_category, administrator, user_id, user_role, setting_changed, target_entity, action_code, action_narrative, previous_value, new_value, ip_session, raw_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      [
+        entry.id,
+        entry.timestamp ? new Date(entry.timestamp) : /* @__PURE__ */ new Date(),
+        entry.scope_category,
+        entry.administrator,
+        entry.user_id,
+        entry.user_role,
+        entry.setting_changed,
+        entry.target_entity,
+        entry.action_code,
+        entry.action_narrative,
+        entry.previous_value,
+        entry.new_value,
+        entry.ip_session,
+        JSON.stringify(entry.raw_json)
+      ]
+    );
     return entry;
   }
   // --- Settings ---
@@ -959,6 +1161,10 @@ var DatabaseManager = class {
       ...this.settings[section],
       ...data
     };
+    this.runQuery(
+      "INSERT INTO system_settings (setting_key, setting_value, updated_by) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value), updated_by=VALUES(updated_by)",
+      [section, JSON.stringify(this.settings[section]), adminName]
+    );
     this.addAuditLog({
       id: `id-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       timestamp: (/* @__PURE__ */ new Date()).toISOString(),
@@ -1018,8 +1224,9 @@ var DatabaseManager = class {
 var db = new DatabaseManager();
 
 // server.ts
+dotenv.config({ path: path2.resolve(process.cwd(), ".env") });
 var app = express();
-var PORT = Number(process.env.PORT) || 3e3;
+var rawPort = process.env.PORT || 3e3;
 app.use(cors());
 app.use(express.json({ limit: "25mb" }));
 app.use(express.urlencoded({ extended: true, limit: "25mb" }));
@@ -1245,6 +1452,52 @@ app.get("/api/database/export", (req, res) => {
   }
   res.send(content);
 });
+app.get("/api/database/download-schema", (req, res) => {
+  const schemaPath = path2.resolve(process.cwd(), "database/schema.sql");
+  if (fs2.existsSync(schemaPath)) {
+    res.setHeader("Content-Type", "application/sql");
+    res.setHeader("Content-Disposition", 'attachment; filename="schema.sql"');
+    res.sendFile(schemaPath);
+  } else {
+    res.status(404).json({ error: "schema.sql not found on server" });
+  }
+});
+app.get("/api/database/download-seed", (req, res) => {
+  const seedPath = path2.resolve(process.cwd(), "database/seed.sql");
+  if (fs2.existsSync(seedPath)) {
+    res.setHeader("Content-Type", "application/sql");
+    res.setHeader("Content-Disposition", 'attachment; filename="seed.sql"');
+    res.sendFile(seedPath);
+  } else {
+    res.status(404).json({ error: "seed.sql not found on server" });
+  }
+});
+app.get("/api/hostinger/download/:packageType", (req, res) => {
+  const pkgType = req.params.packageType;
+  let filename = "";
+  if (pkgType === "nodejs") {
+    filename = "hostinger-nodejs-deploy.zip";
+  } else if (pkgType === "shared") {
+    filename = "hostinger-shared-hosting.zip";
+  } else {
+    return res.status(400).json({ error: 'Invalid package type. Use "nodejs" or "shared".' });
+  }
+  const candidates = [
+    path2.resolve(process.cwd(), filename),
+    path2.resolve(process.cwd(), "public/downloads", filename),
+    path2.resolve(process.cwd(), "dist/downloads", filename)
+  ];
+  for (const candidate of candidates) {
+    if (fs2.existsSync(candidate)) {
+      res.setHeader("Content-Type", "application/zip");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      return res.sendFile(candidate);
+    }
+  }
+  res.status(404).json({
+    error: `Package ${filename} has not been built yet. Run 'npm run package:hostinger' to generate.`
+  });
+});
 app.post("/api/auth/login", (req, res) => {
   const { email, password } = req.body;
   const users = db.getUsers();
@@ -1292,14 +1545,36 @@ async function startServer() {
       }
     });
   } else {
-    const distPath = path2.resolve(process.cwd(), "dist");
-    app.use(express.static(distPath));
+    const distPath = fs2.existsSync(path2.resolve(process.cwd(), "dist")) ? path2.resolve(process.cwd(), "dist") : process.cwd();
+    app.use(express.static(distPath, {
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith("index.html")) {
+          res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+        } else if (filePath.match(/\.(js|css|woff2|png|jpg|svg)$/)) {
+          res.setHeader("Cache-Control", "max-age=31536000, immutable");
+        }
+      }
+    }));
     app.get("*", (req, res) => {
-      res.sendFile(path2.join(distPath, "index.html"));
+      const indexPath = path2.join(distPath, "index.html");
+      if (fs2.existsSync(indexPath)) {
+        res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+        res.sendFile(indexPath);
+      } else {
+        res.sendFile(path2.resolve(process.cwd(), "index.html"));
+      }
     });
   }
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`[Server] OpsDesk portal active on http://0.0.0.0:${PORT}`);
-  });
+  const isSocket = typeof rawPort === "string" && (rawPort.startsWith("/") || rawPort.startsWith("\\\\"));
+  if (isSocket) {
+    app.listen(rawPort, () => {
+      console.log(`[Server] OpsDesk portal active on Unix socket: ${rawPort}`);
+    });
+  } else {
+    const portNumber = Number(rawPort) || 3e3;
+    app.listen(portNumber, "0.0.0.0", () => {
+      console.log(`[Server] OpsDesk portal active on http://0.0.0.0:${portNumber}`);
+    });
+  }
 }
 startServer();

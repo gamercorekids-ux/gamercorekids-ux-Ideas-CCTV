@@ -1,194 +1,164 @@
-# Hostinger MySQL Database & Application Deployment Guide
-**OpsDesk: Multi-Department Operations & Ticketing Portal (Surveillance, Security, Admin, HVAC)**
+# Hostinger Deployment & MySQL Integration Guide
+**OpsDesk: Multi-Department Operations & Ticketing Portal**
 
 ---
 
-## Overview
+## Executive Summary
 
-OpsDesk is engineered to run seamlessly on **Hostinger Hosting** (Business Web Hosting, Cloud Startup, or VPS) with **Hostinger MySQL** as its primary persistent database.
+OpsDesk has been deeply audited and configured specifically for **Hostinger Hosted Environments**:
+- **Hostinger Node.js Application** (Cloud Startup, Business Hosting with Node.js, VPS)
+- **Hostinger Shared Web Hosting** (Apache/LiteSpeed + PHP PDO + MySQL)
+- **Hostinger MySQL 8.0 Database** (phpMyAdmin & Remote MySQL)
 
-This guide provides end-to-end instructions for:
-1. Creating your MySQL database on Hostinger hPanel.
-2. Importing the database schema (`database/schema.sql`) and seed data (`database/seed.sql`).
-3. Configuring remote or local MySQL connection settings.
-4. Deploying the Node.js application to Hostinger.
-5. Verifying live database synchronization.
+Two pre-built, ready-to-deploy ZIP packages are generated and available in the root and in the portal (**Administration → Database Management**):
+1. `hostinger-nodejs-deploy.zip` (~222 KB) — For Hostinger Node.js plans.
+2. `hostinger-shared-hosting.zip` (~207 KB) — For Hostinger Shared Hosting (PHP & Apache).
 
 ---
 
-## Step 1: Create MySQL Database in Hostinger hPanel
+## Why the "Unsupported Framework or Invalid Project Structure" Error Occurred & How It Is Solved
 
-1. Log in to your **Hostinger Control Panel (hPanel)**: [https://hpanel.hostinger.com](https://hpanel.hostinger.com).
+### The Root Cause
+1. **GitHub Nested Subfolder:**
+   When downloading a ZIP from GitHub (or zipping an outer folder), all files sit inside a wrapper folder (e.g. `opsdesk-main/...`). When uploaded to Hostinger, Hostinger looks at the archive's root for `index.html` or `package.json`. Finding only a subfolder causes Hostinger to display:
+   > *"Unsupported framework or invalid project structure"*
+2. **Uploading Raw Source to "Import Website" Wizard:**
+   Hostinger's "Import Website" wizard is intended for WordPress or static HTML exports, not raw TypeScript development files.
+
+### The Permanent Solution
+- **Never use the automated "Import Website" wizard.**
+- Always upload the pre-built flat ZIP directly via **Hostinger File Manager** into `public_html`, and extract in place.
+- Our build script `npm run package:hostinger` builds packages where all required files are located directly at the root of the ZIP file.
+
+---
+
+## Step 1: Create Hostinger MySQL Database in hPanel
+
+1. Log into your **Hostinger Control Panel (hPanel)**: [https://hpanel.hostinger.com](https://hpanel.hostinger.com).
 2. Go to **Databases** → **MySQL Databases**.
-3. Under **Create a New MySQL Database and User**, enter:
-   - **MySQL Database Name**: e.g. `u123456789_opsdesk`
-   - **MySQL Username**: e.g. `u123456789_admin`
-   - **Password**: Generate a strong password (e.g. `SecurePass2026!#`)
+3. Under **Create a New MySQL Database and User**:
+   - **MySQL Database Name**: e.g. `u178364571_surveillance` (or `u123456789_opsdesk`)
+   - **MySQL Username**: e.g. `u178364571_surveillance`
+   - **Password**: Create a strong password (e.g. `Adm!n9102` or `SecurePass2026!#`)
 4. Click **Create**.
-5. Note the values provided:
-   - **Host**: Usually `localhost` when the app runs on the same server, or `srvXXXX.hstgr.io` / IP address for remote access.
-   - **Database Name**: `u123456789_opsdesk`
-   - **Database User**: `u123456789_admin`
+5. Note the connection details:
+   - **Host**: `localhost` (when app and MySQL are on the same Hostinger server) or Hostinger server IP
+   - **Database Name**: e.g. `u178364571_surveillance`
+   - **Database User**: e.g. `u178364571_surveillance`
    - **Port**: `3306`
 
 ---
 
-## Step 2: Import Database Schema & Seed Data
+## Step 2: Import MySQL Schema & Seed Data via phpMyAdmin
 
-1. In hPanel, under **MySQL Databases**, locate your database and click **Enter phpMyAdmin**.
-2. Select your newly created database in the left sidebar.
+1. In hPanel → **MySQL Databases**, find your database and click **Enter phpMyAdmin**.
+2. Select your database in the left sidebar.
 3. Click the **Import** tab in the top navigation bar.
-4. Under **File to import**, click **Choose File** and select `database/schema.sql` from this project.
-5. Click **Go** at the bottom to execute the DDL script.
-6. Once completed, repeat the import for `database/seed.sql` to populate initial master data (95 branches, 4 departments, SLA rules, and default administrative users).
-
-*Alternatively, via SSH/CLI:*
-```bash
-mysql -u u123456789_admin -p u123456789_opsdesk < database/schema.sql
-mysql -u u123456789_admin -p u123456789_opsdesk < database/seed.sql
-```
-
----
-
-## Step 3: Remote MySQL Access (If connecting from outside Hostinger)
-
-If running the application server outside Hostinger while utilizing Hostinger MySQL:
-1. In hPanel, navigate to **Databases** → **Remote MySQL**.
-2. Under **Add IP Address**:
-   - Enter your server IP or enter `%` (wildcard) to allow connections from any authorized IP with valid credentials.
-3. Select your database: `u123456789_opsdesk`.
-4. Click **Create**.
+4. Under **File to import**, click **Choose File**:
+   - Choose `database/schema.sql` (or download it directly from the app under Administration → Database Management).
+   - Click **Go** at the bottom.
+5. Repeat the import for `database/seed.sql` to populate:
+   - 4 Core Departments (Surveillance, Security, Admin, HVAC)
+   - 5 Operational Regions (Central, HQ, Ideas Cafe, North, South)
+   - 95 Real Branches & Locations across Pakistan
+   - Default Administrator and Supervisor accounts
+   - SLA Matrix & Audit Trail
+6. Verify in phpMyAdmin that the tables (`tickets`, `locations`, `users`, `departments`, `regions`, `audit_logs`, `sla_rules`, `system_settings`) appear.
 
 ---
 
-## Step 4: Configure Application Environment (.env)
+## Step 3: Choose Your Hostinger Deployment Path
 
-Create or update your `.env` file in the project root:
+### Path A: Hostinger Node.js Web Hosting (Cloud Startup / Business / VPS)
 
-```env
-# Hostinger MySQL Connection
-MYSQL_HOST=localhost            # Use 'localhost' on Hostinger server or Hostinger server IP
-MYSQL_PORT=3306
-MYSQL_USER=u123456789_admin
-MYSQL_PASSWORD=SecurePass2026!#
-MYSQL_DATABASE=u123456789_opsdesk
-MYSQL_SSL=false
-
-# App Settings
-PORT=3000
-NODE_ENV=production
-JWT_SECRET=your-enterprise-jwt-token-signing-key
-```
-
-You can also test and update this directly inside the running portal in **Administration** → **Database & Backup** → **Hostinger MySQL Sync**!
-
----
-
-## Step 5: Deploy to Hostinger
-
-### Option A: Hostinger Node.js Application (Cloud / Business Hosting)
-1. In hPanel, search for **Node.js** under **Advanced** or **Website**.
-2. Click **Create Application**.
-3. Set:
-   - **Node.js version**: 20.x or 22.x
-   - **Application root**: `public_html` or subfolder
-   - **Application startup file**: `dist-server/server.js` or `server.ts`
-4. Upload project files via Git or FTP.
-5. In the terminal / SSH console on Hostinger:
-   ```bash
-   npm install --production=false
-   npm run build
-   ```
-6. Start or restart the Node.js application in hPanel.
-
-### Option B: Hostinger VPS (Ubuntu / Debian with PM2 & NGINX)
-1. Connect to VPS via SSH:
-   ```bash
-   ssh root@your-hostinger-vps-ip
-   ```
-2. Clone repository & install dependencies:
-   ```bash
-   git clone <your-repo-url> /var/www/opsdesk
-   cd /var/www/opsdesk
-   npm install
-   npm run build
-   ```
-3. Run with PM2 Process Manager:
-   ```bash
-   npm install -g pm2
-   pm2 start server.ts --name "opsdesk" --interpreter tsx
-   pm2 save
-   pm2 startup
-   ```
-4. Configure Nginx reverse proxy to port 3000 with Let's Encrypt SSL:
-   ```nginx
-   server {
-       server_name ops.yourdomain.com;
-
-       location / {
-           proxy_pass http://127.0.0.1:3000;
-           proxy_http_version 1.1;
-           proxy_set_header Upgrade $http_upgrade;
-           proxy_set_header Connection 'upgrade';
-           proxy_set_header Host $host;
-           proxy_cache_bypass $http_upgrade;
-       }
-   }
-   ```
+1. **Upload Package:**
+   - In Hostinger hPanel, navigate to **Files** → **File Manager**.
+   - Open the **`public_html`** directory.
+   - Delete any default placeholder files (e.g. `default.php`).
+   - Click **Upload** and select `hostinger-nodejs-deploy.zip`.
+   - Right-click the uploaded ZIP → click **Extract** → set target to `.` (extract directly into `public_html`).
+2. **Configure Environment Variables (`.env`):**
+   - In File Manager inside `public_html`, copy `.env.example` to `.env`.
+   - Edit `.env` and fill in your Hostinger MySQL details:
+     ```env
+     MYSQL_HOST="localhost"
+     MYSQL_PORT="3306"
+     MYSQL_USER="u178364571_surveillance"
+     MYSQL_PASSWORD="YourHostingerPasswordHere"
+     MYSQL_DATABASE="u178364571_surveillance"
+     MYSQL_SSL="false"
+     PORT=3000
+     NODE_ENV=production
+     ```
+3. **Configure Node.js in hPanel:**
+   - In hPanel, go to **Advanced** / **Website** → **Node.js**.
+   - Click **Create Application** (or manage existing).
+   - Set **Node.js version**: `20.x` or `22.x`
+   - Set **Application Root**: `/public_html`
+   - Set **Application Startup File**: `server.js`
+   - Set **Application Mode**: `Production`
+4. **Start the App:**
+   - Click **Start / Restart Application**.
+   - Open your domain URL in your browser.
 
 ---
 
-## Step 6: Hostinger GitHub Import & Red-Highlighted Command Guide
+### Path B: Hostinger Shared Web Hosting (Apache + PHP + MySQL)
 
-When importing this repository into Hostinger via **hPanel** → **Git** or **Deploy from GitHub**, follow these exact steps:
+*Use this path if your Hostinger plan does not have Node.js enabled.*
 
-### Where to Use the Red-Highlighted Command
-Hostinger displays a red-highlighted command or URL in one of three common scenarios:
-
-1. **Scenario A: If Hostinger gave you an SSH Deploy Key (Red text starting with `ssh-ed25519` or `ssh-rsa`):**
-   - **Where to paste:** Go to your **GitHub Repository** → **Settings** (tab at top of GitHub) → **Deploy keys** (left sidebar) → Click **Add deploy key** → Paste the key, check *Allow write access* if prompted, and click **Add key**.
-
-2. **Scenario B: If Hostinger gave you a Webhook URL (Red highlighted link like `https://hpanel.hostinger.com/api/deploy/git/...`):**
-   - **Where to use:** Go to your **GitHub Repository** → **Settings** → **Webhooks** → Click **Add webhook** → In **Payload URL**, paste the red highlighted URL → Set *Content type* to `application/json` → Under *Which events would you like to trigger this webhook?*, select **Just the push event** → Click **Add webhook**.
-
-3. **Scenario C: If Hostinger gave you a Git Remote Command (e.g. `git remote add hostinger ssh://...` or `git push hostinger main`):**
-   - **Where to run:** Run this command on your **local computer terminal** inside this repository's folder, OR in Hostinger's **SSH Console** (`hPanel -> Advanced -> SSH Access`).
-   ```bash
-   # 1. Add Hostinger remote (paste the exact red command from Hostinger)
-   git remote add hostinger <PASTE_YOUR_RED_COMMAND_HERE>
-
-   # 2. Push to Hostinger
-   git push -u hostinger main
-   ```
-
-### How to Fix Common Hostinger GitHub Import Errors
-
-#### Error 1: "The directory is not empty" / "Destination path already exists"
-- **Cause:** Hostinger's `public_html` directory has default files (such as `default.php` or `index.html`).
-- **Fix:**
-  1. In hPanel, go to **Files** → **File Manager**.
-  2. Open `public_html`.
-  3. Delete the default placeholder files (e.g., `default.php`).
-  4. Return to **Git** in hPanel and re-run the repository clone/deployment.
-
-#### Error 2: "Hostinger Node.js Application Startup File Not Found"
-- **Cause:** Hostinger needs to know which file starts the server.
-- **Fix:**
-  - In hPanel **Node.js**:
-    - Set **Application Root**: `/public_html`
-    - Set **Application Startup File**: `server.js` (generated by `npm run build`) or `server.ts`
-    - In the terminal: run `npm install && npm run build`
-    - Click **Start / Restart** in Hostinger Node.js manager.
+1. **Upload Package:**
+   - In Hostinger hPanel, go to **Files** → **File Manager**.
+   - Open **`public_html`**.
+   - Delete any existing `default.php`.
+   - Click **Upload** and upload `hostinger-shared-hosting.zip`.
+   - Right-click `hostinger-shared-hosting.zip` → click **Extract** into `.` (public_html).
+2. **Configure Database Connection in `.env`:**
+   - Create or edit `.env` in `public_html`:
+     ```env
+     MYSQL_HOST=localhost
+     MYSQL_PORT=3306
+     MYSQL_USER=u178364571_surveillance
+     MYSQL_PASSWORD=YourHostingerPasswordHere
+     MYSQL_DATABASE=u178364571_surveillance
+     ```
+3. **Done!**
+   - Apache / LiteSpeed immediately serves the React SPA via `index.html` and `.htaccess`.
+   - All `/api/*` requests are processed by the native PHP PDO gateway at `api/index.php`.
 
 ---
 
-## Step 7: Default Credentials for First Login
+## Step 4: Verification & Login
 
-| User Role | Email | Password |
-| :--- | :--- | :--- |
-| **Surveillance Super Admin** | `admin.surveillance@ideas.com.pk` | `Password123!` |
-| **Super Admin** | `admin@ideas.com.pk` | `Password123!` |
-| **Security Supervisor Lead** | `supervisor.security@ideas.com.pk` | `Password123!` |
-| **HVAC Field Specialist** | `hvac.tech@ideas.com.pk` | `Password123!` |
+Open your domain in your browser. Use the default master credentials:
 
-*(Admins can change passwords, add technicians, configure SLA policies, and manage locations in the **Administration** tab.)*
+| Account | Email | Default Password | Role |
+| :--- | :--- | :--- | :--- |
+| **Surveillance Super Admin** | `admin.surveillance@ideas.com.pk` | `Password123!` | Full Administrative Control |
+| **Super Admin** | `admin@ideas.com.pk` | `Password123!` | Executive Management |
+| **Security Supervisor Lead** | `supervisor.security@ideas.com.pk` | `Password123!` | Dispatch & Field Supervision |
+| **HVAC Field Specialist** | `hvac.tech@ideas.com.pk` | `Password123!` | Technical Field Operations |
+
+In the portal, navigate to **Administration** → **Database Management**:
+- Click **Hostinger MySQL Sync** to test the live connection.
+- Download complete database JSON backups at any time.
+
+---
+
+## Hostinger GitHub Import & "Red Highlighted Command" Guide
+
+If using Hostinger's **Git Deployment** feature in hPanel:
+1. **Scenario 1: SSH Deploy Key (Red text starting with `ssh-ed25519` or `ssh-rsa`):**
+   - Copy the red text.
+   - Go to your GitHub repository → **Settings** → **Deploy keys** → **Add deploy key**.
+   - Paste the key, title it "Hostinger", and click **Add key**.
+2. **Scenario 2: Webhook URL (Red link `https://hpanel.hostinger.com/api/deploy/git/...`):**
+   - Copy the URL.
+   - Go to GitHub repo → **Settings** → **Webhooks** → **Add webhook**.
+   - Paste URL into **Payload URL**, set content type to `application/json`, select **Just the push event**, and click **Add webhook**.
+3. **Scenario 3: Git Remote Command (e.g. `git remote add hostinger ...`):**
+   - Run this in your computer's terminal inside the project directory:
+     ```bash
+     git remote add hostinger <PASTE_YOUR_RED_COMMAND>
+     git push hostinger main
+     ```

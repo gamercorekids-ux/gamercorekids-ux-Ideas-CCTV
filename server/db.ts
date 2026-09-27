@@ -692,11 +692,11 @@ const INITIAL_SETTINGS = {
     }
   },
   mysql: {
-    host: process.env.MYSQL_HOST || 'localhost',
-    port: Number(process.env.MYSQL_PORT) || 3306,
-    user: process.env.MYSQL_USER || 'u123456789_opsdesk',
-    password: process.env.MYSQL_PASSWORD || '',
-    database: process.env.MYSQL_DATABASE || 'u123456789_ticketing',
+    host: process.env.MYSQL_HOST || process.env.DB_HOST || 'localhost',
+    port: Number(process.env.MYSQL_PORT || process.env.DB_PORT) || 3306,
+    user: process.env.MYSQL_USER || process.env.DB_USER || 'u123456789_opsdesk',
+    password: process.env.MYSQL_PASSWORD || process.env.DB_PASSWORD || '',
+    database: process.env.MYSQL_DATABASE || process.env.DB_NAME || 'u123456789_ticketing',
     ssl: process.env.MYSQL_SSL === 'true'
   }
 };
@@ -721,23 +721,34 @@ class DatabaseManager {
     this.initMySQL();
   }
 
+  private async runQuery(sql: string, params: any[] = []): Promise<any> {
+    if (!this.pool || !this.isConnectedToMySQL) return null;
+    try {
+      return await this.pool.execute(sql, params);
+    } catch (err: any) {
+      console.warn(`[Database MySQL Query Note]: ${err.message}`);
+      return null;
+    }
+  }
+
   public async initMySQL(customConfig?: any) {
     const config = customConfig || this.settings.mysql;
     
     // Only attempt real TCP MySQL connection if host is configured
-    if (config.host && config.password) {
+    if (config.host && (config.password !== undefined)) {
       try {
         const startTime = Date.now();
         const testPool = mysql.createPool({
           host: config.host,
-          port: config.port || 3306,
+          port: Number(config.port) || 3306,
           user: config.user,
           password: config.password,
           database: config.database,
           waitForConnections: true,
           connectionLimit: 10,
           queueLimit: 0,
-          connectTimeout: 5000
+          connectTimeout: 5000,
+          ssl: config.ssl ? { rejectUnauthorized: false } : undefined
         });
 
         // Test connection
@@ -751,8 +762,9 @@ class DatabaseManager {
         this.latencyMs = Math.max(12, Date.now() - startTime);
         console.log(`[Database] Successfully connected to Hostinger MySQL (${config.host}:${config.port}/${config.database}) in ${this.latencyMs}ms`);
 
-        // Ensure tables exist
+        // Ensure tables exist & sync data
         await this.ensureTables();
+        await this.seedAndSync();
       } catch (err: any) {
         this.isConnectedToMySQL = false;
         this.connectionError = err.message || 'Connection failed';
@@ -769,7 +781,7 @@ class DatabaseManager {
     try {
       // Run quick check or table sync
       const [rows]: any = await this.pool.query("SHOW TABLES LIKE 'tickets'");
-      if (rows.length === 0) {
+      if (!rows || rows.length === 0) {
         console.log('[Database] Initializing MySQL tables on Hostinger...');
         const schemaPath = path.resolve(process.cwd(), 'database/schema.sql');
         if (fs.existsSync(schemaPath)) {
@@ -778,7 +790,7 @@ class DatabaseManager {
           for (const stmt of statements) {
             try {
               await this.pool.query(stmt);
-            } catch (e) {
+            } catch {
               // ignore table exists or minor syntax notes
             }
           }
@@ -786,6 +798,97 @@ class DatabaseManager {
       }
     } catch (e: any) {
       console.warn('[Database] ensureTables notice:', e.message);
+    }
+  }
+
+  public async seedAndSync() {
+    if (!this.pool) return;
+    try {
+      // 1. Check if locations table is empty
+      const [locRows]: any = await this.pool.query("SELECT COUNT(*) as count FROM locations");
+      const locCount = locRows?.[0]?.count || 0;
+
+      if (locCount === 0) {
+        console.log('[Database] Hostinger MySQL tables are empty. Seeding initial master data...');
+        // Insert departments
+        for (const d of this.departments) {
+          await this.runQuery(
+            "INSERT IGNORE INTO departments (id, code, name, description, is_primary, status) VALUES (?, ?, ?, ?, ?, ?)",
+            [d.id, d.code, d.name, d.description, d.is_primary ? 1 : 0, d.status]
+          );
+        }
+        // Insert regions
+        for (const r of this.regions) {
+          await this.runQuery(
+            "INSERT IGNORE INTO regions (id, name, code, status) VALUES (?, ?, ?, ?)",
+            [r.id, r.name, r.code, r.status]
+          );
+        }
+        // Insert locations
+        for (const l of this.locations) {
+          await this.runQuery(
+            "INSERT IGNORE INTO locations (id, branch_code, name, region_id, region_name, physical_address, contact_person, phone, notification_email, camera_zones, areas_details, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [l.id, l.branch_code, l.name, l.region_id, l.region_name, l.physical_address, l.contact_person, l.phone, l.notification_email, l.camera_zones, l.areas_details, l.status]
+          );
+        }
+        // Insert users
+        for (const u of this.users) {
+          await this.runQuery(
+            "INSERT IGNORE INTO users (id, name, email, password_hash, department_id, department_name, role, status, avatar_initials, workload_status, granular_rights) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [u.id, u.name, u.email, u.password_hash, u.department_id, u.department_name, u.role, u.status, u.avatar_initials, u.workload_status, JSON.stringify(u.granular_rights)]
+          );
+        }
+        // Insert SLA rules
+        for (const s of this.slaRules) {
+          await this.runQuery(
+            "INSERT IGNORE INTO sla_rules (id, priority_tier, category_domain, department, response_sla_minutes, resolution_sla_hours, escalation_trigger_hours, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            [s.id, s.priority_tier, s.category_domain, s.department, s.response_sla_minutes, s.resolution_sla_hours, s.escalation_trigger_hours, s.status]
+          );
+        }
+        // Insert Tickets
+        for (const t of this.tickets) {
+          await this.runQuery(
+            "INSERT IGNORE INTO tickets (id, ticket_number, subject, description, department_id, department_name, category, priority, status, assigned_technician_id, assigned_technician_name, location_id, location_name, region_name, sla_deadline, sla_status, sla_remaining_hours, evidence_images, created_by_user_id, created_by_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [t.id, t.ticket_number, t.subject, t.description, t.department_id, t.department_name, t.category, t.priority, t.status, t.assigned_technician_id, t.assigned_technician_name, t.location_id, t.location_name, t.region_name, t.sla_deadline ? new Date(t.sla_deadline) : null, t.sla_status, t.sla_remaining_hours, JSON.stringify(t.evidence_images || []), t.created_by_user_id, t.created_by_name]
+          );
+        }
+        console.log('[Database] Hostinger MySQL initial seeding completed.');
+      } else {
+        // Load existing records from MySQL
+        const [depts]: any = await this.pool.query("SELECT * FROM departments ORDER BY is_primary DESC, name ASC");
+        if (depts && depts.length > 0) {
+          this.departments = depts.map((d: any) => ({ ...d, is_primary: Boolean(d.is_primary) }));
+        }
+
+        const [regs]: any = await this.pool.query("SELECT * FROM regions ORDER BY name ASC");
+        if (regs && regs.length > 0) {
+          this.regions = regs;
+        }
+
+        const [locs]: any = await this.pool.query("SELECT * FROM locations ORDER BY name ASC");
+        if (locs && locs.length > 0) {
+          this.locations = locs;
+        }
+
+        const [usrs]: any = await this.pool.query("SELECT * FROM users ORDER BY name ASC");
+        if (usrs && usrs.length > 0) {
+          this.users = usrs.map((u: any) => ({
+            ...u,
+            granular_rights: typeof u.granular_rights === 'string' ? JSON.parse(u.granular_rights) : (u.granular_rights || [])
+          }));
+        }
+
+        const [tix]: any = await this.pool.query("SELECT * FROM tickets ORDER BY created_at DESC");
+        if (tix && tix.length > 0) {
+          this.tickets = tix.map((t: any) => ({
+            ...t,
+            sla_remaining_hours: Number(t.sla_remaining_hours),
+            evidence_images: typeof t.evidence_images === 'string' ? JSON.parse(t.evidence_images) : (t.evidence_images || [])
+          }));
+        }
+      }
+    } catch (err: any) {
+      console.warn('[Database seedAndSync notice]:', err.message);
     }
   }
 
@@ -818,6 +921,10 @@ class DatabaseManager {
 
   public addDepartment(dept: Department): Department {
     this.departments.push(dept);
+    this.runQuery(
+      "INSERT INTO departments (id, code, name, description, is_primary, status) VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE name=VALUES(name)",
+      [dept.id, dept.code, dept.name, dept.description || '', dept.is_primary ? 1 : 0, dept.status || 'active']
+    );
     return dept;
   }
 
@@ -825,12 +932,17 @@ class DatabaseManager {
     const idx = this.departments.findIndex(d => d.id === id);
     if (idx === -1) return null;
     this.departments[idx] = { ...this.departments[idx], ...updates };
+    this.runQuery(
+      "UPDATE departments SET name=COALESCE(?, name), description=COALESCE(?, description), status=COALESCE(?, status) WHERE id=?",
+      [updates.name || null, updates.description || null, updates.status || null, id]
+    );
     return this.departments[idx];
   }
 
   public deleteDepartment(id: string): boolean {
     const initialLen = this.departments.length;
     this.departments = this.departments.filter(d => d.id !== id);
+    this.runQuery("DELETE FROM departments WHERE id=?", [id]);
     return this.departments.length < initialLen;
   }
 
@@ -844,6 +956,10 @@ class DatabaseManager {
 
   public addRegion(region: Region): Region {
     this.regions.push(region);
+    this.runQuery(
+      "INSERT INTO regions (id, name, code, status) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE name=VALUES(name)",
+      [region.id, region.name, region.code, region.status || 'ACTIVE']
+    );
     return region;
   }
 
@@ -851,12 +967,17 @@ class DatabaseManager {
     const idx = this.regions.findIndex(r => r.id === id);
     if (idx === -1) return null;
     this.regions[idx] = { ...this.regions[idx], ...updates };
+    this.runQuery(
+      "UPDATE regions SET name=COALESCE(?, name), status=COALESCE(?, status) WHERE id=?",
+      [updates.name || null, updates.status || null, id]
+    );
     return this.regions[idx];
   }
 
   public deleteRegion(id: string): boolean {
     const initialLen = this.regions.length;
     this.regions = this.regions.filter(r => r.id !== id);
+    this.runQuery("DELETE FROM regions WHERE id=?", [id]);
     return this.regions.length < initialLen;
   }
 
@@ -869,6 +990,10 @@ class DatabaseManager {
 
   public addLocation(loc: Location): Location {
     this.locations.unshift(loc);
+    this.runQuery(
+      "INSERT INTO locations (id, branch_code, name, region_id, region_name, physical_address, contact_person, phone, notification_email, camera_zones, areas_details, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE name=VALUES(name)",
+      [loc.id, loc.branch_code, loc.name, loc.region_id, loc.region_name, loc.physical_address, loc.contact_person, loc.phone, loc.notification_email, loc.camera_zones, loc.areas_details, loc.status]
+    );
     return loc;
   }
 
@@ -876,12 +1001,17 @@ class DatabaseManager {
     const idx = this.locations.findIndex(l => l.id === id);
     if (idx === -1) return null;
     this.locations[idx] = { ...this.locations[idx], ...updates };
+    this.runQuery(
+      "UPDATE locations SET name=COALESCE(?, name), contact_person=COALESCE(?, contact_person), phone=COALESCE(?, phone), status=COALESCE(?, status) WHERE id=?",
+      [updates.name || null, updates.contact_person || null, updates.phone || null, updates.status || null, id]
+    );
     return this.locations[idx];
   }
 
   public deleteLocation(id: string): boolean {
     const initialLen = this.locations.length;
     this.locations = this.locations.filter(l => l.id !== id);
+    this.runQuery("DELETE FROM locations WHERE id=?", [id]);
     return this.locations.length < initialLen;
   }
 
@@ -903,6 +1033,10 @@ class DatabaseManager {
 
   public addUser(user: User): User {
     this.users.push(user);
+    this.runQuery(
+      "INSERT INTO users (id, name, email, password_hash, department_id, department_name, role, status, avatar_initials, workload_status, granular_rights) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE name=VALUES(name)",
+      [user.id, user.name, user.email, user.password_hash, user.department_id, user.department_name, user.role, user.status, user.avatar_initials, user.workload_status, JSON.stringify(user.granular_rights)]
+    );
     return user;
   }
 
@@ -910,12 +1044,17 @@ class DatabaseManager {
     const idx = this.users.findIndex(u => u.id === id);
     if (idx === -1) return null;
     this.users[idx] = { ...this.users[idx], ...updates };
+    this.runQuery(
+      "UPDATE users SET name=COALESCE(?, name), role=COALESCE(?, role), status=COALESCE(?, status) WHERE id=?",
+      [updates.name || null, updates.role || null, updates.status || null, id]
+    );
     return this.users[idx];
   }
 
   public deleteUser(id: string): boolean {
     const initialLen = this.users.length;
     this.users = this.users.filter(u => u.id !== id);
+    this.runQuery("DELETE FROM users WHERE id=?", [id]);
     return this.users.length < initialLen;
   }
 
@@ -928,6 +1067,10 @@ class DatabaseManager {
     const idx = this.slaRules.findIndex(r => r.id === id);
     if (idx === -1) return null;
     this.slaRules[idx] = { ...this.slaRules[idx], ...updates };
+    this.runQuery(
+      "UPDATE sla_rules SET response_sla_minutes=COALESCE(?, response_sla_minutes), resolution_sla_hours=COALESCE(?, resolution_sla_hours), status=COALESCE(?, status) WHERE id=?",
+      [updates.response_sla_minutes ?? null, updates.resolution_sla_hours ?? null, updates.status || null, id]
+    );
     return this.slaRules[idx];
   }
 
@@ -986,6 +1129,19 @@ class DatabaseManager {
 
     this.tickets.unshift(newTicket);
 
+    // Persist to MySQL
+    this.runQuery(
+      "INSERT INTO tickets (id, ticket_number, subject, description, department_id, department_name, category, priority, status, assigned_technician_id, assigned_technician_name, location_id, location_name, region_name, sla_deadline, sla_status, sla_remaining_hours, evidence_images, created_by_user_id, created_by_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      [
+        newTicket.id, newTicket.ticket_number, newTicket.subject, newTicket.description,
+        newTicket.department_id, newTicket.department_name, newTicket.category, newTicket.priority,
+        newTicket.status, newTicket.assigned_technician_id, newTicket.assigned_technician_name,
+        newTicket.location_id, newTicket.location_name, newTicket.region_name,
+        new Date(newTicket.sla_deadline), newTicket.sla_status, newTicket.sla_remaining_hours,
+        JSON.stringify(newTicket.evidence_images || []), newTicket.created_by_user_id, newTicket.created_by_name
+      ]
+    );
+
     // Automatically record in immutable audit log
     this.addAuditLog({
       id: `id-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
@@ -1041,6 +1197,19 @@ class DatabaseManager {
 
     this.tickets[idx] = updatedTicket;
 
+    // Persist ticket update to MySQL
+    this.runQuery(
+      "UPDATE tickets SET subject=COALESCE(?, subject), status=COALESCE(?, status), priority=COALESCE(?, priority), assigned_technician_id=?, assigned_technician_name=?, sla_status=COALESCE(?, sla_status), resolved_at=?, closed_at=?, updated_at=NOW() WHERE id=?",
+      [
+        updatedTicket.subject, updatedTicket.status, updatedTicket.priority,
+        updatedTicket.assigned_technician_id, updatedTicket.assigned_technician_name,
+        updatedTicket.sla_status,
+        updatedTicket.resolved_at ? new Date(updatedTicket.resolved_at) : null,
+        updatedTicket.closed_at ? new Date(updatedTicket.closed_at) : null,
+        id
+      ]
+    );
+
     // Log status or assignment changes
     if (updates.status && updates.status !== oldTicket.status) {
       this.addAuditLog({
@@ -1088,6 +1257,7 @@ class DatabaseManager {
     if (!ticket) return false;
 
     this.tickets = this.tickets.filter(t => t.id !== id);
+    this.runQuery("DELETE FROM tickets WHERE id=?", [id]);
 
     this.addAuditLog({
       id: `id-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
@@ -1128,6 +1298,15 @@ class DatabaseManager {
     if (!ticket.comments) ticket.comments = [];
     ticket.comments.push(newComment);
 
+    this.runQuery(
+      "INSERT INTO ticket_comments (id, ticket_id, user_id, user_name, user_role, comment, attachments, is_internal, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      [
+        newComment.id, newComment.ticket_id, newComment.user_id, newComment.user_name, newComment.user_role,
+        newComment.comment, JSON.stringify(newComment.attachments || []), newComment.is_internal ? 1 : 0,
+        new Date(newComment.created_at)
+      ]
+    );
+
     return newComment;
   }
 
@@ -1139,6 +1318,15 @@ class DatabaseManager {
 
   public addAuditLog(entry: AuditLog): AuditLog {
     this.auditLogs.unshift(entry);
+    this.runQuery(
+      "INSERT INTO audit_logs (id, timestamp, scope_category, administrator, user_id, user_role, setting_changed, target_entity, action_code, action_narrative, previous_value, new_value, ip_session, raw_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      [
+        entry.id, entry.timestamp ? new Date(entry.timestamp) : new Date(), entry.scope_category,
+        entry.administrator, entry.user_id, entry.user_role, entry.setting_changed,
+        entry.target_entity, entry.action_code, entry.action_narrative, entry.previous_value,
+        entry.new_value, entry.ip_session, JSON.stringify(entry.raw_json)
+      ]
+    );
     return entry;
   }
 
@@ -1152,6 +1340,11 @@ class DatabaseManager {
       ...this.settings[section],
       ...data
     };
+
+    this.runQuery(
+      "INSERT INTO system_settings (setting_key, setting_value, updated_by) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value), updated_by=VALUES(updated_by)",
+      [section, JSON.stringify(this.settings[section]), adminName]
+    );
 
     this.addAuditLog({
       id: `id-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,

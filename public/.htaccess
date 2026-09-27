@@ -1,0 +1,56 @@
+# ==============================================================================
+# OpsDesk - Hostinger Apache / LiteSpeed Web Server Configuration
+# ==============================================================================
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+
+  # 1. Block access to sensitive files (environment variables, git, source code)
+  RewriteRule ^\.env.*$ - [F,L]
+  RewriteRule ^(package\.json|package-lock\.json|tsconfig\.json|server\.ts)$ - [F,L]
+  RewriteRule ^database/(.*)\.sql$ - [F,L]
+
+  # 2. If running on Hostinger Shared Hosting (PHP & Apache) and api/index.php exists,
+  # route all /api/* requests to api/index.php
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{DOCUMENT_ROOT}/api/index.php -f
+  RewriteRule ^api/(.*)$ api/index.php [QSA,L]
+
+  # 3. Direct access to existing static files, scripts, assets
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+
+  # 4. Fallback for React Single Page Application (SPA) client-side routing
+  RewriteRule . /index.html [L]
+</IfModule>
+
+# Security Headers & Caching Strategy
+<IfModule mod_headers.c>
+  # Protect against clickjacking and MIME sniffing
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set X-Frame-Options "SAMEORIGIN"
+
+  # Ensure index.html is re-validated immediately so updates take effect without stale cache
+  <FilesMatch "^(index\.html)?$">
+    Header set Cache-Control "no-cache, no-store, must-revalidate"
+    Header set Pragma "no-cache"
+    Header set Expires 0
+  </FilesMatch>
+
+  # Cache compiled Vite static assets (with immutable hash in filename) for high performance
+  <FilesMatch "\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$">
+    Header set Cache-Control "max-age=31536000, public, immutable"
+  </FilesMatch>
+</IfModule>
+
+# Enable proper MIME types for modern web assets
+<IfModule mod_mime.c>
+  AddType application/javascript .js
+  AddType text/css .css
+  AddType application/json .json
+  AddType font/woff2 .woff2
+  AddType font/woff .woff
+  AddType image/svg+xml .svg
+</IfModule>

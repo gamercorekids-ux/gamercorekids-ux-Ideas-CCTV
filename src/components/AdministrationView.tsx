@@ -24,7 +24,15 @@ import {
   FileDown,
   Key,
   Camera,
-  Check
+  Check,
+  Server,
+  Package,
+  HardDrive,
+  Download,
+  AlertTriangle,
+  Terminal,
+  Layers,
+  ExternalLink
 } from 'lucide-react';
 import { Department, Location, SystemSettings, User, DbStatus, AuditLog } from '../types';
 
@@ -1046,6 +1054,136 @@ export const AdministrationView: React.FC<AdministrationViewProps> = ({
                   <a href="/api/database/export?target=audit&format=json" download className="text-blue-600 font-semibold hover:underline">JSON</a>
                   <span className="text-slate-300">•</span>
                   <a href="/api/database/export?target=audit&format=csv" download className="text-blue-600 font-semibold hover:underline">CSV</a>
+                </div>
+              </div>
+            </div>
+
+            {/* Hostinger Ready-to-Deploy ZIP Packages & MySQL DDL Downloads */}
+            <div className="pt-4 border-t border-slate-200/80 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <Package className="w-4 h-4 text-emerald-600" />
+                    <span>Hostinger Hosted Environment Packages (Direct Deploy)</span>
+                  </h4>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Pre-packaged archives structured directly at the archive root. Eliminates the Hostinger "Unsupported framework or invalid project structure" ZIP error.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                    Hostinger Optimized
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Node.js Plan Package */}
+                <div className="p-4 rounded-xl border border-emerald-200 bg-emerald-50/40 hover:bg-emerald-50/70 transition-colors flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold uppercase tracking-wider text-emerald-900 flex items-center gap-1.5">
+                        <Server className="w-4 h-4 text-emerald-600" />
+                        Hostinger Node.js Web Hosting
+                      </span>
+                      <span className="text-[10px] font-bold px-2 py-0.5 bg-emerald-200/70 text-emerald-900 rounded">
+                        Fullstack API & MySQL
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-600 mt-2">
+                      For Hostinger <strong>Cloud Startup, Business Hosting (Node.js), or VPS</strong>. Contains <code className="text-emerald-900 font-mono">server.js</code>, <code className="text-emerald-900 font-mono">dist/</code>, and <code className="text-emerald-900 font-mono">database/</code> directly at root.
+                    </p>
+                    <div className="mt-3 flex items-center gap-2 text-[11px] text-emerald-800 font-medium">
+                      <span>• Startup File: server.js</span>
+                      <span>• Node 20.x/22.x</span>
+                    </div>
+                  </div>
+                  <div className="mt-4 pt-3 border-t border-emerald-200/70 flex items-center justify-between">
+                    <a
+                      href="/api/hostinger/download/nodejs"
+                      download="hostinger-nodejs-deploy.zip"
+                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold flex items-center gap-2 shadow-2xs transition-colors"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>Download Node.js Deploy ZIP</span>
+                    </a>
+                    <span className="text-[10px] text-slate-400 font-mono">~222 KB</span>
+                  </div>
+                </div>
+
+                {/* Shared Hosting (PHP & Apache) Package */}
+                <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100/70 transition-colors flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold uppercase tracking-wider text-slate-900 flex items-center gap-1.5">
+                        <Layers className="w-4 h-4 text-blue-600" />
+                        Hostinger Shared Web Hosting
+                      </span>
+                      <span className="text-[10px] font-bold px-2 py-0.5 bg-slate-200 text-slate-800 rounded">
+                        Apache + PHP PDO + MySQL
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-600 mt-2">
+                      For standard Hostinger <strong>Single or Premium Web Hosting</strong> (no Node.js required). Contains <code className="text-slate-900 font-mono">index.html</code>, <code className="text-slate-900 font-mono">api/index.php</code>, and <code className="text-slate-900 font-mono">.htaccess</code> at root.
+                    </p>
+                    <div className="mt-3 flex items-center gap-2 text-[11px] text-slate-600 font-medium">
+                      <span>• Apache / LiteSpeed Rewrite</span>
+                      <span>• PHP 7.4 - 8.3+</span>
+                    </div>
+                  </div>
+                  <div className="mt-4 pt-3 border-t border-slate-200 flex items-center justify-between">
+                    <a
+                      href="/api/hostinger/download/shared"
+                      download="hostinger-shared-hosting.zip"
+                      className="px-4 py-2 bg-[#0F2942] hover:bg-[#163859] text-white rounded-lg text-xs font-semibold flex items-center gap-2 shadow-2xs transition-colors"
+                    >
+                      <Download className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Download Shared Hosting ZIP</span>
+                    </a>
+                    <span className="text-[10px] text-slate-400 font-mono">~207 KB</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Hostinger phpMyAdmin SQL DDL Downloader */}
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                <div>
+                  <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                    <HardDrive className="w-4 h-4 text-emerald-600" />
+                    <span>Hostinger MySQL Schema & Seed SQL Files</span>
+                  </div>
+                  <p className="text-slate-500 text-[11px] mt-0.5">
+                    Import directly into Hostinger hPanel → Databases → phpMyAdmin.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <a
+                    href="/api/database/download-schema"
+                    download="schema.sql"
+                    className="px-3 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 font-semibold text-slate-700 flex items-center gap-1.5"
+                  >
+                    <FileDown className="w-3.5 h-3.5 text-blue-600" />
+                    <span>schema.sql</span>
+                  </a>
+                  <a
+                    href="/api/database/download-seed"
+                    download="seed.sql"
+                    className="px-3 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 font-semibold text-slate-700 flex items-center gap-1.5"
+                  >
+                    <FileDown className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>seed.sql (95 Locations)</span>
+                  </a>
+                </div>
+              </div>
+
+              {/* Quick Instructions banner */}
+              <div className="p-3.5 rounded-xl bg-amber-50/70 border border-amber-200 text-xs text-amber-900 flex items-start gap-2.5">
+                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <div className="font-bold">How to extract without the Hostinger "Unsupported Framework" Error:</div>
+                  <p className="text-[11px] text-amber-800">
+                    In Hostinger hPanel, go to <strong>Files → File Manager</strong>, open <strong>public_html</strong>, click <strong>Upload</strong> and select the downloaded ZIP. Then right-click the ZIP and click <strong>Extract</strong> directly into <code className="font-mono font-semibold">.</code> (public_html). Do not use the automated "Import Website" wizard.
+                  </p>
                 </div>
               </div>
             </div>

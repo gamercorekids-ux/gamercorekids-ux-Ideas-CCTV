@@ -1,3 +1,7 @@
+import dotenv from 'dotenv';
+// Load environment variables from .env in process.cwd() and __dirname
+dotenv.config({ path: path.resolve(process.cwd(), '.env') });
+
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import path from 'path';
@@ -5,7 +9,7 @@ import fs from 'fs';
 import { db } from './server/db';
 
 const app = express();
-const PORT = Number(process.env.PORT) || 3000;
+const rawPort = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json({ limit: '25mb' }));
@@ -286,6 +290,61 @@ app.get('/api/database/export', (req: Request, res: Response) => {
   res.send(content);
 });
 
+// 9b. Download SQL Schema and Seed for Hostinger phpMyAdmin
+app.get('/api/database/download-schema', (req: Request, res: Response) => {
+  const schemaPath = path.resolve(process.cwd(), 'database/schema.sql');
+  if (fs.existsSync(schemaPath)) {
+    res.setHeader('Content-Type', 'application/sql');
+    res.setHeader('Content-Disposition', 'attachment; filename="schema.sql"');
+    res.sendFile(schemaPath);
+  } else {
+    res.status(404).json({ error: 'schema.sql not found on server' });
+  }
+});
+
+app.get('/api/database/download-seed', (req: Request, res: Response) => {
+  const seedPath = path.resolve(process.cwd(), 'database/seed.sql');
+  if (fs.existsSync(seedPath)) {
+    res.setHeader('Content-Type', 'application/sql');
+    res.setHeader('Content-Disposition', 'attachment; filename="seed.sql"');
+    res.sendFile(seedPath);
+  } else {
+    res.status(404).json({ error: 'seed.sql not found on server' });
+  }
+});
+
+// 9c. Download Hostinger Deployment Packages
+app.get('/api/hostinger/download/:packageType', (req: Request, res: Response) => {
+  const pkgType = req.params.packageType;
+  let filename = '';
+  if (pkgType === 'nodejs') {
+    filename = 'hostinger-nodejs-deploy.zip';
+  } else if (pkgType === 'shared') {
+    filename = 'hostinger-shared-hosting.zip';
+  } else {
+    return res.status(400).json({ error: 'Invalid package type. Use "nodejs" or "shared".' });
+  }
+
+  // Look in root or public/downloads
+  const candidates = [
+    path.resolve(process.cwd(), filename),
+    path.resolve(process.cwd(), 'public/downloads', filename),
+    path.resolve(process.cwd(), 'dist/downloads', filename)
+  ];
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      return res.sendFile(candidate);
+    }
+  }
+
+  res.status(404).json({
+    error: `Package ${filename} has not been built yet. Run 'npm run package:hostinger' to generate.`
+  });
+});
+
 // 10. Auth / Verification
 app.post('/api/auth/login', (req: Request, res: Response) => {
   const { email, password } = req.body;
@@ -349,17 +408,44 @@ async function startServer() {
       }
     });
   } else {
-    // Production static files
-    const distPath = path.resolve(process.cwd(), 'dist');
-    app.use(express.static(distPath));
+    // Production static files: check dist/ folder first, then process.cwd()
+    const distPath = fs.existsSync(path.resolve(process.cwd(), 'dist'))
+      ? path.resolve(process.cwd(), 'dist')
+      : process.cwd();
+
+    app.use(express.static(distPath, {
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith('index.html')) {
+          res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        } else if (filePath.match(/\.(js|css|woff2|png|jpg|svg)$/)) {
+          res.setHeader('Cache-Control', 'max-age=31536000, immutable');
+        }
+      }
+    }));
+
     app.get('*', (req: Request, res: Response) => {
-      res.sendFile(path.join(distPath, 'index.html'));
+      const indexPath = path.join(distPath, 'index.html');
+      if (fs.existsSync(indexPath)) {
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.sendFile(indexPath);
+      } else {
+        res.sendFile(path.resolve(process.cwd(), 'index.html'));
+      }
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`[Server] OpsDesk portal active on http://0.0.0.0:${PORT}`);
-  });
+  // Hostinger Port & Socket Binding
+  const isSocket = typeof rawPort === 'string' && (rawPort.startsWith('/') || rawPort.startsWith('\\\\'));
+  if (isSocket) {
+    app.listen(rawPort, () => {
+      console.log(`[Server] OpsDesk portal active on Unix socket: ${rawPort}`);
+    });
+  } else {
+    const portNumber = Number(rawPort) || 3000;
+    app.listen(portNumber, '0.0.0.0', () => {
+      console.log(`[Server] OpsDesk portal active on http://0.0.0.0:${portNumber}`);
+    });
+  }
 }
 
 startServer();
