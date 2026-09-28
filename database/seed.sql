@@ -28,17 +28,17 @@ INSERT INTO `sla_rules` (`id`, `priority_tier`, `category_domain`, `department`,
 ('sla_low', 'LOW', 'General Inquiry', 'General Operations', 480, 72, 60, 'Active')
 ON DUPLICATE KEY UPDATE `category_domain`=VALUES(`category_domain`);
 
--- 4. Initial Users (All default passwords: "Password123!")
+-- 4. Initial Users (Master Credentials: admin@ideas.com.pk / @dm!n#+390++--)
 INSERT INTO `users` (`id`, `name`, `email`, `password_hash`, `department_id`, `department_name`, `role`, `status`, `avatar_initials`, `workload_status`, `granular_rights`) VALUES
-('admin-surveillance', 'Surveillance Super Admin', 'admin.surveillance@ideas.com.pk', '$2a$10$abcdefghijklmnopqrstuvwxyz0123456789', 'dept_surveillance', 'Security Operations & Surveillance', 'SUPER_ADMIN', 'Active', 'SA', 'Idle', '["Tickets", "Resolve", "Live Feeds", "Users", "Settings", "Audit", "Delete"]'),
-('admin-super', 'Super Admin', 'admin@ideas.com.pk', '$2a$10$abcdefghijklmnopqrstuvwxyz0123456789', 'dept_surveillance', 'Security Operations & Surveillance', 'SUPER_ADMIN', 'Active', 'SA', 'Idle', '["Tickets", "Resolve", "Live Feeds", "Users", "Settings", "Audit", "Delete"]'),
-('admin-general', 'Administrator', 'administrator@ideas.com.pk', '$2a$10$abcdefghijklmnopqrstuvwxyz0123456789', 'dept_admin', 'Administration & Governance', 'SUPER_ADMIN', 'Active', 'AD', 'Idle', '["Tickets", "Resolve", "Live Feeds", "Users", "Settings"]'),
-('sec-lead', 'Security Supervisor Lead', 'supervisor.security@ideas.com.pk', '$2a$10$abcdefghijklmnopqrstuvwxyz0123456789', 'dept_security', 'Security Operations & Surveillance', 'SUPERVISOR', 'Active', 'SE', 'Idle', '["Tickets", "Resolve", "Live Feeds", "Assign"]'),
-('ops-sup', 'Operations Supervisor', 'supervisor.ops@ideas.com.pk', '$2a$10$abcdefghijklmnopqrstuvwxyz0123456789', 'dept_surveillance', 'Security Operations & Surveillance', 'SUPERVISOR', 'Active', 'OP', 'Idle', '["Tickets", "Resolve", "Live Feeds", "Assign"]'),
-('sup-three', 'Supervisor Three', 'supervisor3@ideas.com.pk', '$2a$10$abcdefghijklmnopqrstuvwxyz0123456789', 'dept_surveillance', 'Security Operations & Surveillance', 'SUPERVISOR', 'Active', 'SU', 'Idle', '["Tickets", "Resolve"]'),
-('sup-test', 'Supervisor Test', 'supervisor.test@ideas.com.pk', '$2a$10$abcdefghijklmnopqrstuvwxyz0123456789', 'dept_surveillance', 'Security Operations & Surveillance', 'SUPERVISOR', 'Active', 'SU', 'Idle', '["Tickets", "Resolve"]'),
-('tech-hvac', 'HVAC Field Specialist', 'hvac.tech@ideas.com.pk', '$2a$10$abcdefghijklmnopqrstuvwxyz0123456789', 'dept_hvac', 'HVAC & Climate Control', 'TECHNICIAN', 'Active', 'HV', 'Idle', '["Tickets", "Resolve"]')
-ON DUPLICATE KEY UPDATE `name`=VALUES(`name`);
+('admin-super', 'Super Admin', 'admin@ideas.com.pk', '@dm!n#+390++--', 'dept_surveillance', 'Security Operations & Surveillance', 'SUPER_ADMIN', 'Active', 'AD', 'Idle', '["Tickets", "Resolve", "Live Feeds", "Users", "Settings", "Audit", "Delete"]'),
+('admin-surveillance', 'Surveillance Super Admin', 'admin.surveillance@ideas.com.pk', '@dm!n#+390++--', 'dept_surveillance', 'Security Operations & Surveillance', 'SUPER_ADMIN', 'Active', 'SA', 'Idle', '["Tickets", "Resolve", "Live Feeds", "Users", "Settings", "Audit", "Delete"]'),
+('admin-general', 'Administrator', 'administrator@ideas.com.pk', '@dm!n#+390++--', 'dept_admin', 'Administration & Governance', 'SUPER_ADMIN', 'Active', 'AD', 'Idle', '["Tickets", "Resolve", "Live Feeds", "Users", "Settings"]'),
+('sec-lead', 'Security Supervisor Lead', 'supervisor.security@ideas.com.pk', '@dm!n#+390++--', 'dept_security', 'Security Operations & Surveillance', 'SUPERVISOR', 'Active', 'SE', 'Idle', '["Tickets", "Resolve", "Live Feeds", "Assign"]'),
+('ops-sup', 'Operations Supervisor', 'supervisor.ops@ideas.com.pk', '@dm!n#+390++--', 'dept_surveillance', 'Security Operations & Surveillance', 'SUPERVISOR', 'Active', 'OP', 'Idle', '["Tickets", "Resolve", "Live Feeds", "Assign"]'),
+('sup-three', 'Supervisor Three', 'supervisor3@ideas.com.pk', '@dm!n#+390++--', 'dept_surveillance', 'Security Operations & Surveillance', 'SUPERVISOR', 'Active', 'SU', 'Idle', '["Tickets", "Resolve"]'),
+('sup-test', 'Supervisor Test', 'supervisor.test@ideas.com.pk', '@dm!n#+390++--', 'dept_surveillance', 'Security Operations & Surveillance', 'SUPERVISOR', 'Active', 'SU', 'Idle', '["Tickets", "Resolve"]'),
+('tech-hvac', 'HVAC Field Specialist', 'hvac.tech@ideas.com.pk', '@dm!n#+390++--', 'dept_hvac', 'HVAC & Climate Control', 'TECHNICIAN', 'Active', 'HV', 'Idle', '["Tickets", "Resolve"]')
+ON DUPLICATE KEY UPDATE `password_hash`=VALUES(`password_hash`), `name`=VALUES(`name`);
 
 -- 5. Locations (Representative sample + all regions populated)
 INSERT INTO `locations` (`id`, `branch_code`, `name`, `region_id`, `region_name`, `physical_address`, `contact_person`, `phone`, `notification_email`, `camera_zones`, `areas_details`, `status`) VALUES

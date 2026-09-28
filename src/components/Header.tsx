@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Bell, CheckCircle2, AlertTriangle, Shield, RefreshCw, Database, ChevronDown } from 'lucide-react';
+import { Search, Bell, CheckCircle2, AlertTriangle, Shield, RefreshCw, Database, ChevronDown, LogOut } from 'lucide-react';
 import { Department, User, DbStatus } from '../types';
 
 interface HeaderProps {
@@ -13,6 +13,7 @@ interface HeaderProps {
   dbStatus: DbStatus | null;
   onOpenCommandPalette: () => void;
   onOpenDbModal: () => void;
+  onLogout?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -25,7 +26,8 @@ export const Header: React.FC<HeaderProps> = ({
   onSwitchUser,
   dbStatus,
   onOpenCommandPalette,
-  onOpenDbModal
+  onOpenDbModal,
+  onLogout
 }) => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -248,6 +250,19 @@ export const Header: React.FC<HeaderProps> = ({
                     <Database className="w-3.5 h-3.5 text-slate-500" />
                     <span>Hostinger MySQL Sync Status</span>
                   </button>
+
+                  {onLogout && (
+                    <button
+                      onClick={() => {
+                        setShowUserMenu(false);
+                        onLogout();
+                      }}
+                      className="w-full text-left px-3 py-1.5 text-xs text-rose-600 hover:bg-rose-50 rounded flex items-center gap-2 font-medium transition-colors"
+                    >
+                      <LogOut className="w-3.5 h-3.5 text-rose-500" />
+                      <span>Lock & Sign Out</span>
+                    </button>
+                  )}
                 </div>
               </div>
             )}

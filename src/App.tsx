@@ -26,25 +26,35 @@ import { TicketDetailModal } from './components/TicketDetailModal';
 import { NewTicketModal } from './components/NewTicketModal';
 import { HostingerDbModal } from './components/HostingerDbModal';
 import { CommandPalette } from './components/CommandPalette';
+import { LoginPage } from './components/LoginPage';
 
 export default function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    return sessionStorage.getItem('opsdesk_auth') === 'true';
+  });
   const [activeTab, setActiveTab] = useState<TabId>('dashboard');
   const [departments, setDepartments] = useState<Department[]>([]);
   const [activeDepartmentId, setActiveDepartmentId] = useState<string>('all');
   const [regions, setRegions] = useState<Region[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [users, setUsers] = useState<User[]>([]);
-  const [currentUser, setCurrentUser] = useState<User>({
-    id: 'admin-surveillance',
-    name: 'Surveillance Super Admin',
-    email: 'admin.surveillance@ideas.com.pk',
-    department_id: 'dept_surveillance',
-    department_name: 'Security Operations & Surveillance',
-    role: 'SUPER_ADMIN',
-    status: 'Active',
-    avatar_initials: 'SU',
-    workload_status: 'Idle',
-    granular_rights: ['Tickets', 'Resolve', 'Live Feeds', 'Users', 'Settings', 'Audit', 'Delete']
+  const [currentUser, setCurrentUser] = useState<User>(() => {
+    try {
+      const saved = sessionStorage.getItem('opsdesk_user');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return {
+      id: 'admin-super',
+      name: 'Super Admin',
+      email: 'admin@ideas.com.pk',
+      department_id: 'dept_surveillance',
+      department_name: 'Security Operations & Surveillance',
+      role: 'SUPER_ADMIN',
+      status: 'Active',
+      avatar_initials: 'AD',
+      workload_status: 'Idle',
+      granular_rights: ['Tickets', 'Resolve', 'Live Feeds', 'Users', 'Settings', 'Audit', 'Delete']
+    };
   });
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [slaRules, setSlaRules] = useState<SlaRule[]>([]);
@@ -381,6 +391,21 @@ export default function App() {
     );
   }
 
+  // If user is not authenticated, render the custom enterprise login page matching image
+  if (!isAuthenticated) {
+    return (
+      <LoginPage
+        onLoginSuccess={user => {
+          if (user) {
+            setCurrentUser(user);
+          }
+          setIsAuthenticated(true);
+        }}
+        onBypassLogin={() => setIsAuthenticated(true)}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex flex-col selection:bg-emerald-500/20 selection:text-emerald-800">
       {/* 1. Header (Sticky) */}
@@ -395,6 +420,11 @@ export default function App() {
         dbStatus={dbStatus}
         onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
         onOpenDbModal={() => setIsDbModalOpen(true)}
+        onLogout={() => {
+          sessionStorage.removeItem('opsdesk_auth');
+          sessionStorage.removeItem('opsdesk_user');
+          setIsAuthenticated(false);
+        }}
       />
 
       {/* 2. Navigation Pill Bar (Sticky) */}

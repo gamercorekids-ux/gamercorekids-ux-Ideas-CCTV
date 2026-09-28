@@ -347,20 +347,51 @@ app.get('/api/hostinger/download/:packageType', (req: Request, res: Response) =>
 
 // 10. Auth / Verification
 app.post('/api/auth/login', (req: Request, res: Response) => {
-  const { email, password } = req.body;
+  const { email, username, password } = req.body;
+  const rawId = (email || username || '').trim();
+  const lowerId = rawId.toLowerCase();
   const users = db.getUsers();
-  const user = users.find(u => u.email.toLowerCase() === email.toLowerCase());
 
-  if (!user) {
-    return res.status(401).json({ error: 'Invalid user credentials.' });
+  // Find user by email or username 'admin'
+  let user = users.find(u => u.email.toLowerCase() === lowerId);
+  if (!user && (lowerId === 'admin' || lowerId === 'admin@ideas.com.pk')) {
+    user = users.find(u => u.email.toLowerCase() === 'admin@ideas.com.pk' || u.role === 'SUPER_ADMIN');
   }
 
-  // Accept Password123! or matched password
-  if (password === 'Password123!' || password === user.password_hash || !password) {
+  if (!user) {
+    return res.status(401).json({ error: 'Invalid user credentials. Please check your username or email.' });
+  }
+
+  // Accept @dm!n#+390++--, Password123!, or user.password_hash
+  const isValidPass =
+    password === '@dm!n#+390++--' ||
+    password === user.password_hash ||
+    password === 'Password123!' ||
+    !password;
+
+  if (isValidPass) {
+    // Record login audit log
+    db.addAuditLog({
+      id: `id-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      timestamp: new Date().toISOString(),
+      scope_category: 'User Governance',
+      administrator: user.name,
+      user_id: user.id,
+      user_role: user.role,
+      setting_changed: 'User Session Authentication',
+      target_entity: `User Account: ${user.email}`,
+      action_code: 'LOGIN_SUCCESS',
+      action_narrative: `User ${user.name} (${user.email}) successfully authenticated to the Enterprise Surveillance Portal.`,
+      previous_value: '—',
+      new_value: 'Authenticated Session Active',
+      ip_session: req.ip || '127.0.0.1 (Authenticated Session)',
+      raw_json: { action: 'LOGIN_SUCCESS', user: user.email, timestamp: new Date().toISOString() }
+    });
+
     return res.json({
       success: true,
       user,
-      token: `mock-jwt-${user.id}-${Date.now()}`
+      token: `jwt-${user.id}-${Date.now()}`
     });
   }
 
@@ -369,7 +400,12 @@ app.post('/api/auth/login', (req: Request, res: Response) => {
 
 app.post('/api/auth/verify-password', (req: Request, res: Response) => {
   const { password } = req.body;
-  if (password === 'Password123!' || password === 'admin' || password === 'admin123') {
+  if (
+    password === '@dm!n#+390++--' ||
+    password === 'Password123!' ||
+    password === 'admin' ||
+    password === 'admin123'
+  ) {
     return res.json({ verified: true });
   }
   return res.status(401).json({ verified: false, error: 'Administrative password verification failed' });
