@@ -8,8 +8,7 @@ interface HeaderProps {
   activeDepartmentId: string;
   onSelectDepartment: (id: string) => void;
   currentUser: User;
-  users: User[];
-  onSwitchUser: (user: User) => void;
+  onLogout: () => void;
   dbStatus: DbStatus | null;
   onOpenCommandPalette: () => void;
   onOpenDbModal: () => void;
@@ -22,8 +21,7 @@ export const Header: React.FC<HeaderProps> = ({
   activeDepartmentId,
   onSelectDepartment,
   currentUser,
-  users,
-  onSwitchUser,
+  onLogout,
   dbStatus,
   onOpenCommandPalette,
   onOpenDbModal,
@@ -182,7 +180,7 @@ export const Header: React.FC<HeaderProps> = ({
 
           <div className="h-5 w-px bg-slate-200"></div>
 
-          {/* User Account & Role Switcher */}
+          {/* User Account */}
           <div className="relative">
             <button
               onClick={() => setShowUserMenu(!showUserMenu)}
@@ -194,6 +192,7 @@ export const Header: React.FC<HeaderProps> = ({
                 </div>
                 <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-white rounded-full"></span>
               </div>
+
               <div className="hidden lg:block">
                 <div className="text-xs font-semibold text-slate-900 leading-tight truncate max-w-[130px]">
                   {currentUser.name}
@@ -202,41 +201,24 @@ export const Header: React.FC<HeaderProps> = ({
                   {currentUser.role}
                 </div>
               </div>
+
               <ChevronDown className="w-3.5 h-3.5 text-slate-400 hidden lg:block" />
             </button>
 
             {showUserMenu && (
               <div className="absolute right-0 mt-2 w-72 bg-white border border-slate-200 rounded-xl shadow-xl py-2 z-50">
                 <div className="px-4 py-2.5 border-b border-slate-100">
-                  <div className="font-semibold text-xs text-slate-900">{currentUser.name}</div>
-                  <div className="text-[11px] text-slate-500 font-mono">{currentUser.email}</div>
+                  <div className="font-semibold text-xs text-slate-900">
+                    {currentUser.name}
+                  </div>
+
+                  <div className="text-[11px] text-slate-500 font-mono">
+                    {currentUser.email}
+                  </div>
+
                   <div className="mt-1 inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                     {currentUser.role} · Active Session
                   </div>
-                </div>
-
-                <div className="px-4 py-2 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-                  Switch Active Role Profile
-                </div>
-                <div className="max-h-48 overflow-y-auto divide-y divide-slate-50">
-                  {users.map(u => (
-                    <button
-                      key={u.id}
-                      onClick={() => {
-                        onSwitchUser(u);
-                        setShowUserMenu(false);
-                      }}
-                      className={`w-full text-left px-4 py-2 text-xs flex items-center justify-between hover:bg-slate-50 transition-colors ${
-                        currentUser.id === u.id ? 'bg-emerald-50/50 font-semibold text-emerald-800' : 'text-slate-700'
-                      }`}
-                    >
-                      <div className="truncate">
-                        <div className="truncate">{u.name}</div>
-                        <div className="text-[10px] text-slate-400">{u.role} · {u.department_name}</div>
-                      </div>
-                      {currentUser.id === u.id && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 ml-2" />}
-                    </button>
-                  ))}
                 </div>
 
                 <div className="p-2 border-t border-slate-100 flex flex-col gap-1">
@@ -251,18 +233,15 @@ export const Header: React.FC<HeaderProps> = ({
                     <span>Hostinger MySQL Sync Status</span>
                   </button>
 
-                  {onLogout && (
-                    <button
-                      onClick={() => {
-                        setShowUserMenu(false);
-                        onLogout();
-                      }}
-                      className="w-full text-left px-3 py-1.5 text-xs text-rose-600 hover:bg-rose-50 rounded flex items-center gap-2 font-medium transition-colors"
-                    >
-                      <LogOut className="w-3.5 h-3.5 text-rose-500" />
-                      <span>Lock & Sign Out</span>
-                    </button>
-                  )}
+                  <button
+                    onClick={() => {
+                      setShowUserMenu(false);
+                      onLogout();
+                    }}
+                    className="w-full text-left px-3 py-1.5 text-xs text-rose-700 hover:bg-rose-50 rounded font-medium"
+                  >
+                    Sign out
+                  </button>
                 </div>
               </div>
             )}

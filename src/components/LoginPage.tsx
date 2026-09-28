@@ -17,10 +17,9 @@ import { IdeasLogo } from './IdeasLogo';
 
 interface LoginPageProps {
   onLoginSuccess: (user: any) => void;
-  onBypassLogin?: () => void;
 }
 
-export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onBypassLogin }) => {
+export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -39,66 +38,26 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onBypassLo
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: identifier, username: identifier, password })
+        credentials: 'include',
+        body: JSON.stringify({
+          email: identifier.trim(),
+          password
+        })
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
 
-      if (res.ok && data.success) {
-        sessionStorage.setItem('opsdesk_auth', 'true');
-        sessionStorage.setItem('opsdesk_user', JSON.stringify(data.user));
-        onLoginSuccess(data.user);
-      } else {
-        // Fallback check if user entered admin/@dm!n#+390++-- or admin@ideas.com.pk
-        const cleanIdent = identifier.trim().toLowerCase();
-        if (
-          (cleanIdent === 'admin@ideas.com.pk' || cleanIdent === 'admin') &&
-          (password === '@dm!n#+390++--' || password === 'Password123!')
-        ) {
-          const defaultAdmin = {
-            id: 'admin-surveillance',
-            name: 'Surveillance Super Admin',
-            email: 'admin@ideas.com.pk',
-            department_id: 'dept_surveillance',
-            department_name: 'Security Operations & Surveillance',
-            role: 'SUPER_ADMIN',
-            status: 'Active',
-            avatar_initials: 'AD',
-            workload_status: 'Idle',
-            granular_rights: ['Tickets', 'Resolve', 'Live Feeds', 'Users', 'Settings', 'Audit', 'Delete']
-          };
-          sessionStorage.setItem('opsdesk_auth', 'true');
-          sessionStorage.setItem('opsdesk_user', JSON.stringify(defaultAdmin));
-          onLoginSuccess(defaultAdmin);
-        } else {
-          setError(data.error || 'Invalid credentials. Please enter valid administrative access details.');
-        }
+      if (!res.ok || !data.success || !data.user) {
+        setError(
+          data?.error ||
+          'Invalid username or password. Please try again.'
+        );
+        return;
       }
+
+      onLoginSuccess(data.user);
     } catch {
-      // Local fallback for offline/client environments
-      const cleanIdent = identifier.trim().toLowerCase();
-      if (
-        (cleanIdent === 'admin@ideas.com.pk' || cleanIdent === 'admin') &&
-        (password === '@dm!n#+390++--' || password === 'Password123!')
-      ) {
-        const defaultAdmin = {
-          id: 'admin-surveillance',
-          name: 'Surveillance Super Admin',
-          email: 'admin@ideas.com.pk',
-          department_id: 'dept_surveillance',
-          department_name: 'Security Operations & Surveillance',
-          role: 'SUPER_ADMIN',
-          status: 'Active',
-          avatar_initials: 'AD',
-          workload_status: 'Idle',
-          granular_rights: ['Tickets', 'Resolve', 'Live Feeds', 'Users', 'Settings', 'Audit', 'Delete']
-        };
-        sessionStorage.setItem('opsdesk_auth', 'true');
-        sessionStorage.setItem('opsdesk_user', JSON.stringify(defaultAdmin));
-        onLoginSuccess(defaultAdmin);
-      } else {
-        setError('Incorrect username or password. Please try again.');
-      }
+      setError('Unable to connect to the authentication server. Please try again.');
     } finally {
       setLoading(false);
     }

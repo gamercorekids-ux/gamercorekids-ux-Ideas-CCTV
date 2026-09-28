@@ -15,7 +15,7 @@ const API_BASE = '/api';
 
 async function safeJsonFetch<T>(url: string, options?: RequestInit, fallback?: T): Promise<T> {
   try {
-    const res = await fetch(url, options);
+    const res = await fetch(url, { ...options, credentials: 'include' });
     const contentType = (res.headers.get('content-type') || '').toLowerCase();
     
     // Always read as text first to guard against empty responses and HTML fallback errors
@@ -38,6 +38,50 @@ async function safeJsonFetch<T>(url: string, options?: RequestInit, fallback?: T
   } catch {
     return (fallback !== undefined ? fallback : ([] as unknown as T));
   }
+}
+
+
+export async function login(email: string, password: string): Promise<User> {
+  const res = await fetch(`${API_BASE}/auth/login`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    credentials: 'include',
+    body: JSON.stringify({ email, password })
+  });
+
+  const data = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    throw new Error(data?.error || 'Invalid email or password.');
+  }
+
+  return data.user as User;
+}
+
+export async function getCurrentUser(): Promise<User | null> {
+  try {
+    const res = await fetch(`${API_BASE}/auth/me`, {
+      credentials: 'include'
+    });
+
+    if (res.status === 401 || !res.ok) {
+      return null;
+    }
+
+    const data = await res.json().catch(() => null);
+    return data?.user || null;
+  } catch {
+    return null;
+  }
+}
+
+export async function logout(): Promise<void> {
+  await fetch(`${API_BASE}/auth/logout`, {
+    method: 'POST',
+    credentials: 'include'
+  });
 }
 
 export async function fetchHealth(): Promise<{ status: string }> {

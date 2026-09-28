@@ -1,4 +1,5 @@
 import mysql from 'mysql2/promise';
+import bcrypt from 'bcryptjs';
 import fs from 'fs';
 import path from 'path';
 
@@ -870,13 +871,51 @@ class DatabaseManager {
           this.locations = locs;
         }
 
-        const [usrs]: any = await this.pool.query("SELECT * FROM users ORDER BY name ASC");
-        if (usrs && usrs.length > 0) {
-          this.users = usrs.map((u: any) => ({
-            ...u,
-            granular_rights: typeof u.granular_rights === 'string' ? JSON.parse(u.granular_rights) : (u.granular_rights || [])
-          }));
-        }
+        const [usrs]: any = await this.pool.query(
+  "SELECT * FROM users ORDER BY name ASC"
+);
+
+if (usrs && usrs.length > 0) {
+  const migratedUsers: User[] = [];
+
+  for (const u of usrs) {
+    let passwordHash = String(u.password_hash || '');
+
+    const isValidBcrypt =
+      /^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$/.test(passwordHash);
+
+    if (!isValidBcrypt) {
+      // Existing installation used plaintext passwords.
+      // The original seeded password was Password123!.
+      const passwordToHash =
+        passwordHash.startsWith('$2')
+          ? 'Password123!'
+          : (passwordHash || 'Password123!');
+
+      passwordHash = bcrypt.hashSync(passwordToHash, 12);
+
+      await this.pool.query(
+        "UPDATE users SET password_hash=? WHERE id=?",
+        [passwordHash, u.id]
+      );
+
+      console.log(
+        `[Database] Migrated password hash for user ${u.email}`
+      );
+    }
+
+    migratedUsers.push({
+      ...u,
+      password_hash: passwordHash,
+      granular_rights:
+        typeof u.granular_rights === 'string'
+          ? JSON.parse(u.granular_rights)
+          : (u.granular_rights || [])
+    });
+  }
+
+  this.users = migratedUsers;
+}
 
         const [tix]: any = await this.pool.query("SELECT * FROM tickets ORDER BY created_at DESC");
         if (tix && tix.length > 0) {
@@ -1016,45 +1055,164 @@ class DatabaseManager {
   }
 
   // --- Users & Teams ---
-  public getUsers(): User[] {
+
+  /**
+   * Remove sensitive authentication data before returning users
+   * to the frontend.
+   */
+  private sanitizeUser(user: User): any {
+    const { password_hash, ...safeUser } = user;
+    return safeUser;
+  }
+
+  public getUsers(): any[] {
     return this.users.map(u => {
-      const assigned = this.tickets.filter(t => t.assigned_technician_id === u.id);
+      const assigned = this.tickets.filter(
+        t => t.assigned_technician_id === u.id
+      );
+
       return {
-        ...u,
+        ...this.sanitizeUser(u),
         assigned_count: assigned.length,
-        pending_count: assigned.filter(t => t.status === 'NEW' || t.status === 'OPEN').length,
-        in_process_count: assigned.filter(t => t.status === 'IN PROGRESS').length,
-        closed_count: assigned.filter(t => t.status === 'CLOSED' || t.status === 'RESOLVED').length,
-        delayed_count: assigned.filter(t => t.sla_status === 'BREACHED').length,
+        pending_count: assigned.filter(
+          t => t.status === 'NEW' || t.status === 'OPEN'
+        ).length,
+        in_process_count: assigned.filter(
+          t => t.status === 'IN PROGRESS'
+        ).length,
+        closed_count: assigned.filter(
+          t => t.status === 'CLOSED' || t.status === 'RESOLVED'
+        ).length,
+        delayed_count: assigned.filter(
+          t => t.sla_status === 'BREACHED'
+        ).length,
         compliance_percent: 100
       };
     });
   }
 
+  /**
+   * Internal authentication lookup.
+   * Never expose this method directly through an API route.
+   */
+  public getUserByEmail(email: string): User | null {
+    const normalizedEmail = String(email || '').trim().toLowerCase();
+
+    return (
+      this.users.find(
+        u => u.email.trim().toLowerCase() === normalizedEmail
+      ) || null
+    );
+  }
+
+  /**
+   * Internal authenticated-user lookup.
+   */
+  public getUserById(id: string): User | null {
+    return this.users.find(u => u.id === id) || null;
+  }
+
+  public updateLastLogin(id: string): void {
+    const user = this.users.find(u => u.id === id);
+
+    if (user) {
+      user.last_login = new Date().toISOString();
+    }
+
+    this.runQuery(
+      "UPDATE users SET last_login=CURRENT_TIMESTAMP WHERE id=?",
+      [id]
+    );
+  }
+
   public addUser(user: User): User {
-    this.users.push(user);
+    const suppliedPassword = String(user.password_hash || '');
+
+    const passwordHash =
+      suppliedPassword.startsWith('$2a$') ||
+      suppliedPassword.startsWith('$2b$') ||
+      suppliedPassword.startsWith('$2y$')
+        ? suppliedPassword
+        : bcrypt.hashSync(
+            suppliedPassword || 'Password123!',
+            12
+          );
+
+    const storedUser: User = {
+      ...user,
+      password_hash: passwordHash
+    };
+
+    this.users.push(storedUser);
+
     this.runQuery(
       "INSERT INTO users (id, name, email, password_hash, department_id, department_name, role, status, avatar_initials, workload_status, granular_rights) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE name=VALUES(name)",
-      [user.id, user.name, user.email, user.password_hash, user.department_id, user.department_name, user.role, user.status, user.avatar_initials, user.workload_status, JSON.stringify(user.granular_rights)]
+      [
+        storedUser.id,
+        storedUser.name,
+        storedUser.email,
+        storedUser.password_hash,
+        storedUser.department_id,
+        storedUser.department_name,
+        storedUser.role,
+        storedUser.status,
+        storedUser.avatar_initials,
+        storedUser.workload_status,
+        JSON.stringify(storedUser.granular_rights)
+      ]
     );
-    return user;
+
+    return storedUser;
   }
 
   public updateUser(id: string, updates: Partial<User>): User | null {
     const idx = this.users.findIndex(u => u.id === id);
+
     if (idx === -1) return null;
-    this.users[idx] = { ...this.users[idx], ...updates };
+
+    const nextUser: User = {
+      ...this.users[idx],
+      ...updates
+    };
+
+    let passwordHash = this.users[idx].password_hash;
+
+    if (updates.password_hash) {
+      const suppliedPassword = String(updates.password_hash);
+
+      passwordHash =
+        suppliedPassword.startsWith('$2a$') ||
+        suppliedPassword.startsWith('$2b$') ||
+        suppliedPassword.startsWith('$2y$')
+          ? suppliedPassword
+          : bcrypt.hashSync(suppliedPassword, 12);
+
+      nextUser.password_hash = passwordHash;
+    }
+
+    this.users[idx] = nextUser;
+
     this.runQuery(
-      "UPDATE users SET name=COALESCE(?, name), role=COALESCE(?, role), status=COALESCE(?, status) WHERE id=?",
-      [updates.name || null, updates.role || null, updates.status || null, id]
+      "UPDATE users SET name=COALESCE(?, name), role=COALESCE(?, role), status=COALESCE(?, status), password_hash=COALESCE(?, password_hash) WHERE id=?",
+      [
+        updates.name || null,
+        updates.role || null,
+        updates.status || null,
+        updates.password_hash ? passwordHash : null,
+        id
+      ]
     );
-    return this.users[idx];
+
+    return nextUser;
   }
 
   public deleteUser(id: string): boolean {
     const initialLen = this.users.length;
+
     this.users = this.users.filter(u => u.id !== id);
+
     this.runQuery("DELETE FROM users WHERE id=?", [id]);
+
     return this.users.length < initialLen;
   }
 

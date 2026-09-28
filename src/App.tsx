@@ -29,33 +29,14 @@ import { CommandPalette } from './components/CommandPalette';
 import { LoginPage } from './components/LoginPage';
 
 export default function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    return sessionStorage.getItem('opsdesk_auth') === 'true';
-  });
   const [activeTab, setActiveTab] = useState<TabId>('dashboard');
   const [departments, setDepartments] = useState<Department[]>([]);
   const [activeDepartmentId, setActiveDepartmentId] = useState<string>('all');
   const [regions, setRegions] = useState<Region[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [users, setUsers] = useState<User[]>([]);
-  const [currentUser, setCurrentUser] = useState<User>(() => {
-    try {
-      const saved = sessionStorage.getItem('opsdesk_user');
-      if (saved) return JSON.parse(saved);
-    } catch {}
-    return {
-      id: 'admin-super',
-      name: 'Super Admin',
-      email: 'admin@ideas.com.pk',
-      department_id: 'dept_surveillance',
-      department_name: 'Security Operations & Surveillance',
-      role: 'SUPER_ADMIN',
-      status: 'Active',
-      avatar_initials: 'AD',
-      workload_status: 'Idle',
-      granular_rights: ['Tickets', 'Resolve', 'Live Feeds', 'Users', 'Settings', 'Audit', 'Delete']
-    };
-  });
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [slaRules, setSlaRules] = useState<SlaRule[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
@@ -69,8 +50,31 @@ export default function App() {
   const [isDbModalOpen, setIsDbModalOpen] = useState(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
 
+  // Restore the authenticated session from the HttpOnly cookie.
+  useEffect(() => {
+    let mounted = true;
+
+    api.getCurrentUser()
+      .then(user => {
+        if (mounted) {
+          setCurrentUser(user);
+        }
+      })
+      .finally(() => {
+        if (mounted) {
+          setAuthLoading(false);
+        }
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   // Load all initial data from backend
   const loadData = useCallback(async () => {
+    if (!currentUser) return;
+
     try {
       const [
         deptsRes,
@@ -103,26 +107,40 @@ export default function App() {
       setAuditLogs(Array.isArray(auditRes) ? auditRes : []);
       if (settingsRes) setSettings(settingsRes);
       if (statusRes) setDbStatus(statusRes);
-
-      // Keep currentUser synced
-      if (Array.isArray(usersRes)) {
-        const matched = usersRes.find(u => u.id === currentUser.id);
-        if (matched) {
-          setCurrentUser(matched);
-        } else if (usersRes.length > 0) {
-          setCurrentUser(usersRes[0]);
-        }
-      }
     } catch {
       // Gracefully continue with available state
     } finally {
       setLoading(false);
     }
-  }, [activeDepartmentId, currentUser.id]);
+  }, [activeDepartmentId, currentUser?.id]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  const handleLogin = async (email: string, password: string) => {
+    const user = await api.login(email, password);
+    setCurrentUser(user);
+    setActiveTab('dashboard');
+    setLoading(true);
+  };
+
+  const handleLogout = async () => {
+    try {
+      await api.logout();
+    } finally {
+      setCurrentUser(null);
+      setTickets([]);
+      setUsers([]);
+      setAuditLogs([]);
+      setSlaRules([]);
+      setSettings(null);
+      setDbStatus(null);
+      setActiveTab('dashboard');
+    }
+  };
+
+
 
   // Global hotkey: ⌘K to open search command palette
   useEffect(() => {
@@ -153,9 +171,9 @@ export default function App() {
   const handleUpdateTicketStatus = async (ticketId: string, status: any) => {
     try {
       const updated = await api.updateTicket(ticketId, { status }, {
-        id: currentUser.id,
-        name: currentUser.name,
-        role: currentUser.role
+        id: currentUser!.id,
+        name: currentUser!.name,
+        role: currentUser!.role
       });
       setTickets(prev => prev.map(t => (t.id === ticketId ? updated : t)));
       if (selectedTicket?.id === ticketId) setSelectedTicket(updated);
@@ -169,9 +187,9 @@ export default function App() {
   const handleUpdateTicketPriority = async (ticketId: string, priority: any) => {
     try {
       const updated = await api.updateTicket(ticketId, { priority }, {
-        id: currentUser.id,
-        name: currentUser.name,
-        role: currentUser.role
+        id: currentUser!.id,
+        name: currentUser!.name,
+        role: currentUser!.role
       });
       setTickets(prev => prev.map(t => (t.id === ticketId ? updated : t)));
       if (selectedTicket?.id === ticketId) setSelectedTicket(updated);
@@ -187,7 +205,7 @@ export default function App() {
       const updated = await api.updateTicket(
         ticketId,
         { assigned_technician_id: techId || null, assigned_technician_name: techName },
-        { id: currentUser.id, name: currentUser.name, role: currentUser.role }
+        { id: currentUser!.id, name: currentUser!.name, role: currentUser!.role }
       );
       setTickets(prev => prev.map(t => (t.id === ticketId ? updated : t)));
       if (selectedTicket?.id === ticketId) setSelectedTicket(updated);
@@ -202,7 +220,7 @@ export default function App() {
 
   const handleDeleteTicket = async (ticketId: string) => {
     try {
-      await api.deleteTicket(ticketId, { id: currentUser.id, name: currentUser.name, role: currentUser.role });
+      await api.deleteTicket(ticketId, { id: currentUser!.id, name: currentUser!.name, role: currentUser!.role });
       setTickets(prev => prev.filter(t => t.id !== ticketId));
       if (selectedTicket?.id === ticketId) setSelectedTicket(null);
       const logs = await api.fetchAuditLogs();
@@ -217,9 +235,9 @@ export default function App() {
   const handleAddComment = async (ticketId: string, comment: string) => {
     try {
       const newComment = await api.addTicketComment(ticketId, {
-        user_id: currentUser.id,
-        user_name: currentUser.name,
-        user_role: currentUser.role,
+        user_id: currentUser!.id,
+        user_name: currentUser!.name,
+        user_role: currentUser!.role,
         comment
       });
       setTickets(prev =>
@@ -348,7 +366,7 @@ export default function App() {
 
   const handleUpdateSettings = async (section: string, data: any) => {
     try {
-      const updated = await api.updateSettings(section, data, currentUser.name);
+      const updated = await api.updateSettings(section, data, currentUser!.name);
       setSettings(prev => (prev ? { ...prev, [section]: updated } : null));
       const logs = await api.fetchAuditLogs();
       setAuditLogs(logs);
@@ -359,7 +377,7 @@ export default function App() {
 
   const handleSyncDatabase = async () => {
     try {
-      const res = await api.saveAndSyncDb(currentUser.name);
+      const res = await api.saveAndSyncDb(currentUser!.name);
       setDbStatus(res.status);
       const logs = await api.fetchAuditLogs();
       setAuditLogs(logs);
@@ -379,6 +397,19 @@ export default function App() {
     status: 'active'
   };
 
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-lg font-semibold">OPSDESK</div>
+          <div className="text-sm text-slate-400 mt-2">
+            Checking session...
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#09151F] text-white flex flex-col items-center justify-center p-4">
@@ -391,19 +422,9 @@ export default function App() {
     );
   }
 
-  // If user is not authenticated, render the custom enterprise login page matching image
-  if (!isAuthenticated) {
-    return (
-      <LoginPage
-        onLoginSuccess={user => {
-          if (user) {
-            setCurrentUser(user);
-          }
-          setIsAuthenticated(true);
-        }}
-        onBypassLogin={() => setIsAuthenticated(true)}
-      />
-    );
+  // If no valid HttpOnly-cookie session exists, show the enterprise login page.
+  if (!currentUser) {
+    return <LoginPage onLoginSuccess={handleLogin} />;
   }
 
   return (
@@ -414,24 +435,18 @@ export default function App() {
         departments={departments}
         activeDepartmentId={activeDepartmentId}
         onSelectDepartment={id => setActiveDepartmentId(id)}
-        currentUser={currentUser}
-        users={users}
-        onSwitchUser={u => setCurrentUser(u)}
+        currentUser={currentUser!}
+        onLogout={handleLogout}
         dbStatus={dbStatus}
         onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
         onOpenDbModal={() => setIsDbModalOpen(true)}
-        onLogout={() => {
-          sessionStorage.removeItem('opsdesk_auth');
-          sessionStorage.removeItem('opsdesk_user');
-          setIsAuthenticated(false);
-        }}
       />
 
       {/* 2. Navigation Pill Bar (Sticky) */}
       <Navigation
         activeTab={activeTab}
         onTabChange={tab => setActiveTab(tab)}
-        currentUser={currentUser}
+        currentUser={currentUser!}
         ticketsCount={tickets.length}
       />
 
@@ -457,7 +472,7 @@ export default function App() {
             users={users}
             locations={locations}
             regions={regions}
-            currentUser={currentUser}
+            currentUser={currentUser!}
             onOpenNewTicket={() => setIsNewTicketOpen(true)}
             onSelectTicket={t => setSelectedTicket(t)}
             onUpdateTicketStatus={handleUpdateTicketStatus}
@@ -473,7 +488,7 @@ export default function App() {
             users={users}
             locations={locations}
             regions={regions}
-            currentUser={currentUser}
+            currentUser={currentUser!}
             onOpenNewTicket={() => setIsNewTicketOpen(true)}
             onSelectTicket={t => setSelectedTicket(t)}
             onUpdateTicketStatus={handleUpdateTicketStatus}
@@ -515,7 +530,7 @@ export default function App() {
           <UsersTeamsView
             users={users}
             departments={departments}
-            currentUser={currentUser}
+            currentUser={currentUser!}
             onAddUser={handleAddUser}
             onUpdateUser={handleUpdateUser}
             onDeleteUser={handleDeleteUser}
@@ -555,7 +570,7 @@ export default function App() {
         <TicketDetailModal
           ticket={selectedTicket}
           users={users}
-          currentUser={currentUser}
+          currentUser={currentUser!}
           onClose={() => setSelectedTicket(null)}
           onUpdateStatus={handleUpdateTicketStatus}
           onUpdatePriority={handleUpdateTicketPriority}
@@ -569,7 +584,7 @@ export default function App() {
           departments={departments}
           locations={locations}
           users={users}
-          currentUser={currentUser}
+          currentUser={currentUser!}
           onClose={() => setIsNewTicketOpen(false)}
           onSubmit={handleCreateTicket}
         />

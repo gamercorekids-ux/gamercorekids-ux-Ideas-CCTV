@@ -1,12 +1,14 @@
 import dotenv from 'dotenv';
-// Load environment variables from .env in process.cwd() and __dirname
-dotenv.config({ path: path.resolve(process.cwd(), '.env') });
-
-import express, { Request, Response } from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import path from 'path';
 import fs from 'fs';
+import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
 import { db } from './server/db';
+
+// Load environment variables from .env in process.cwd()
+dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
 const app = express();
 const rawPort = process.env.PORT || 3000;
@@ -14,6 +16,78 @@ const rawPort = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json({ limit: '25mb' }));
 app.use(express.urlencoded({ extended: true, limit: '25mb' }));
+
+// ============================================================================
+// AUTHENTICATION
+// ============================================================================
+
+const JWT_SECRET = process.env.JWT_SECRET;
+
+if (!JWT_SECRET) {
+  throw new Error('JWT_SECRET is not configured in the environment.');
+}
+
+const SESSION_COOKIE = 'opsdesk_session';
+const SESSION_MAX_AGE = 8 * 60 * 60 * 1000; // 8 hours
+
+function getSessionToken(req: Request): string | null {
+  const cookieHeader = req.headers.cookie || '';
+
+  const cookie = cookieHeader
+    .split(';')
+    .map(value => value.trim())
+    .find(value => value.startsWith(`${SESSION_COOKIE}=`));
+
+  if (!cookie) {
+    return null;
+  }
+
+  return decodeURIComponent(
+    cookie.substring(`${SESSION_COOKIE}=`.length)
+  );
+}
+
+function requireAuth(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  const token = getSessionToken(req);
+
+  if (!token) {
+    return res.status(401).json({
+      error: 'Authentication required.'
+    });
+  }
+
+  try {
+    const payload = jwt.verify(token, JWT_SECRET) as {
+      sub?: string;
+      role?: string;
+    };
+
+    if (!payload.sub) {
+      throw new Error('Invalid session.');
+    }
+
+    const user = db.getUserById(payload.sub);
+
+    if (!user || user.status !== 'Active') {
+      return res.status(401).json({
+        error: 'Authentication required.'
+      });
+    }
+
+    // Make authenticated user available to protected routes.
+    (req as any).authenticatedUser = user;
+
+    next();
+  } catch {
+    return res.status(401).json({
+      error: 'Authentication required.'
+    });
+  }
+}
 
 // ============================================================================
 // API ROUTES
@@ -27,6 +101,151 @@ app.get('/api/health', (req: Request, res: Response) => {
     service: 'OpsDesk Multi-Department Portal API'
   });
 });
+
+// ============================================================================
+// AUTH ROUTES
+// ============================================================================
+
+app.post('/api/auth/login', async (req: Request, res: Response) => {
+  try {
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    const password = String(req.body?.password || '');
+
+    if (!email || !password) {
+      return res.status(400).json({
+        error: 'Email and password are required.'
+      });
+    }
+
+    const user = db.getUserByEmail(email);
+
+    if (!user || user.status !== 'Active') {
+      return res.status(401).json({
+        error: 'Invalid email or password.'
+      });
+    }
+
+    const passwordMatches = await bcrypt.compare(
+      password,
+      user.password_hash
+    );
+
+    if (!passwordMatches) {
+      return res.status(401).json({
+        error: 'Invalid email or password.'
+      });
+    }
+
+    db.updateLastLogin(user.id);
+
+    const token = jwt.sign(
+      {
+        sub: user.id,
+        role: user.role
+      },
+      JWT_SECRET,
+      {
+        expiresIn: '8h'
+      }
+    );
+
+    res.cookie(SESSION_COOKIE, token, {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.COOKIE_SECURE === 'true',
+      maxAge: SESSION_MAX_AGE,
+      path: '/'
+    });
+
+    const safeUser = db
+      .getUsers()
+      .find((u: any) => u.id === user.id);
+
+    return res.json({
+      success: true,
+      user: safeUser
+    });
+  } catch (err: any) {
+    console.error('[Auth] Login error:', err);
+
+    return res.status(500).json({
+      error: 'Authentication service error.'
+    });
+  }
+});
+
+app.get(
+  '/api/auth/me',
+  requireAuth,
+  (req: Request, res: Response) => {
+    const user = (req as any).authenticatedUser;
+
+    return res.json({
+      authenticated: true,
+      user: db
+        .getUsers()
+        .find((u: any) => u.id === user.id)
+    });
+  }
+);
+
+app.post('/api/auth/logout', (req: Request, res: Response) => {
+  res.clearCookie(SESSION_COOKIE, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.COOKIE_SECURE === 'true',
+    path: '/'
+  });
+
+  return res.json({
+    success: true
+  });
+});
+
+app.post(
+  '/api/auth/verify-password',
+  requireAuth,
+  async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).authenticatedUser;
+      const password = String(req.body?.password || '');
+
+      if (!password) {
+        return res.status(400).json({
+          verified: false,
+          error: 'Password is required.'
+        });
+      }
+
+      const verified = await bcrypt.compare(
+        password,
+        user.password_hash
+      );
+
+      if (!verified) {
+        return res.status(401).json({
+          verified: false,
+          error: 'Password verification failed.'
+        });
+      }
+
+      return res.json({
+        verified: true
+      });
+    } catch (err: any) {
+      console.error('[Auth] Password verification error:', err);
+
+      return res.status(500).json({
+        verified: false,
+        error: 'Password verification service error.'
+      });
+    }
+  }
+);
+
+// All remaining API endpoints require an authenticated session.
+app.use('/api', requireAuth);
+
 
 app.get('/api/db/status', (req: Request, res: Response) => {
   res.json(db.getStatus());
@@ -169,8 +388,19 @@ app.get('/api/users', (req: Request, res: Response) => {
 
 app.post('/api/users', (req: Request, res: Response) => {
   try {
-    const initials = req.body.name
+    const name = String(req.body?.name || '').trim();
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    const password = String(req.body?.password || '');
+
+    if (!name || !email || !password) {
+      return res.status(400).json({
+        error: 'Name, email, and password are required.'
+      });
+    }
+
+    const initials = name
       .split(' ')
+      .filter(Boolean)
       .map((s: string) => s[0])
       .join('')
       .substring(0, 2)
@@ -178,9 +408,9 @@ app.post('/api/users', (req: Request, res: Response) => {
 
     const user = db.addUser({
       id: req.body.id || `user_${Date.now()}`,
-      name: req.body.name,
-      email: req.body.email,
-      password_hash: req.body.password || 'Password123!',
+      name,
+      email,
+      password_hash: password,
       department_id: req.body.department_id || 'dept_surveillance',
       department_name: req.body.department_name || 'Security Operations & Surveillance',
       role: req.body.role || 'TECHNICIAN',
@@ -189,6 +419,7 @@ app.post('/api/users', (req: Request, res: Response) => {
       workload_status: 'Idle',
       granular_rights: req.body.granular_rights || ['Tickets', 'Resolve']
     });
+
     res.json({ success: true, user });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
@@ -345,74 +576,6 @@ app.get('/api/hostinger/download/:packageType', (req: Request, res: Response) =>
   });
 });
 
-// 10. Auth / Verification
-app.post('/api/auth/login', (req: Request, res: Response) => {
-  const { email, username, password } = req.body;
-  const rawId = (email || username || '').trim();
-  const lowerId = rawId.toLowerCase();
-  const users = db.getUsers();
-
-  // Find user by email or username 'admin'
-  let user = users.find(u => u.email.toLowerCase() === lowerId);
-  if (!user && (lowerId === 'admin' || lowerId === 'admin@ideas.com.pk')) {
-    user = users.find(u => u.email.toLowerCase() === 'admin@ideas.com.pk' || u.role === 'SUPER_ADMIN');
-  }
-
-  if (!user) {
-    return res.status(401).json({ error: 'Invalid user credentials. Please check your username or email.' });
-  }
-
-  // Accept @dm!n#+390++--, Password123!, or user.password_hash
-  const isValidPass =
-    password === '@dm!n#+390++--' ||
-    password === user.password_hash ||
-    password === 'Password123!' ||
-    !password;
-
-  if (isValidPass) {
-    // Record login audit log
-    db.addAuditLog({
-      id: `id-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-      timestamp: new Date().toISOString(),
-      scope_category: 'User Governance',
-      administrator: user.name,
-      user_id: user.id,
-      user_role: user.role,
-      setting_changed: 'User Session Authentication',
-      target_entity: `User Account: ${user.email}`,
-      action_code: 'LOGIN_SUCCESS',
-      action_narrative: `User ${user.name} (${user.email}) successfully authenticated to the Enterprise Surveillance Portal.`,
-      previous_value: '—',
-      new_value: 'Authenticated Session Active',
-      ip_session: req.ip || '127.0.0.1 (Authenticated Session)',
-      raw_json: { action: 'LOGIN_SUCCESS', user: user.email, timestamp: new Date().toISOString() }
-    });
-
-    return res.json({
-      success: true,
-      user,
-      token: `jwt-${user.id}-${Date.now()}`
-    });
-  }
-
-  return res.status(401).json({ error: 'Incorrect password.' });
-});
-
-app.post('/api/auth/verify-password', (req: Request, res: Response) => {
-  const { password } = req.body;
-  if (
-    password === '@dm!n#+390++--' ||
-    password === 'Password123!' ||
-    password === 'admin' ||
-    password === 'admin123'
-  ) {
-    return res.json({ verified: true });
-  }
-  return res.status(401).json({ verified: false, error: 'Administrative password verification failed' });
-});
-
-// 404 handler for unknown API routes
-app.all('/api/*', (req: Request, res: Response) => {
   res.status(404).json({ error: `API route not found: ${req.method} ${req.url}` });
 });
 
