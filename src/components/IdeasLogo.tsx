@@ -5,7 +5,6 @@ interface IdeasLogoProps {
   size?: 'sm' | 'md' | 'lg' | 'xl';
   textColor?: string;
   glyphColor?: string;
-  showBadge?: boolean;
 }
 
 export const IdeasLogo: React.FC<IdeasLogoProps> = ({
@@ -14,94 +13,67 @@ export const IdeasLogo: React.FC<IdeasLogoProps> = ({
   glyphColor = '#59B828',
   textColor = '#59B828'
 }) => {
-  // Dimensions based on size
   const heights = {
-    sm: 24,
-    md: 36,
-    lg: 48,
-    xl: 60
+    sm: 26,
+    md: 38,
+    lg: 52,
+    xl: 66
   };
 
-  const h = heights[size] || 36;
-  const w = Math.round(h * 3.4);
+  const h = heights[size] || 38;
+  const w = Math.round(h * 3.6);
 
   return (
-    <div className={`inline-flex items-center gap-2 select-none ${className}`}>
+    <div className={`inline-flex items-center select-none ${className}`}>
       <svg
         width={w}
         height={h}
-        viewBox="0 0 200 56"
+        viewBox="0 0 210 56"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
         className="overflow-visible"
         aria-label="Ideas Logo"
       >
-        {/* Ideas 4-element Clover / Grid Emblem */}
-        <g transform="translate(0, 4)">
-          {/* Top-Left petal */}
-          <rect
-            x="2"
-            y="2"
-            width="17"
-            height="18"
-            rx="6"
-            fill={glyphColor}
-          />
-          {/* Top-Right petal */}
-          <rect
-            x="23"
-            y="2"
-            width="17"
-            height="18"
-            rx="6"
-            fill={glyphColor}
-          />
-          {/* Bottom-Left petal */}
-          <rect
-            x="2"
-            y="24"
-            width="17"
-            height="18"
-            rx="6"
-            fill={glyphColor}
-          />
-          {/* Bottom-Right petal */}
-          <rect
-            x="23"
-            y="24"
-            width="17"
-            height="18"
-            rx="6"
-            fill={glyphColor}
-          />
+        {/* 4-Leaf Emblem Grid */}
+        <g transform="translate(0, 3)">
+          {/* Top-Left */}
+          <rect x="2" y="2" width="18" height="19" rx="7" fill={glyphColor} />
+          {/* Top-Right */}
+          <rect x="23" y="2" width="18" height="19" rx="7" fill={glyphColor} />
+          {/* Bottom-Left */}
+          <rect x="2" y="24" width="18" height="19" rx="7" fill={glyphColor} />
+          {/* Bottom-Right */}
+          <rect x="23" y="24" width="18" height="19" rx="7" fill={glyphColor} />
         </g>
 
-        {/* Ideas stylized typography */}
+        {/* Wordmark "ideas" in heavy rounded sans */}
         <text
-          x="50"
+          x="49"
           y="42"
           fill={textColor}
-          fontFamily="system-ui, -apple-system, 'Plus Jakarta Sans', sans-serif"
+          fontFamily="'Plus Jakarta Sans', 'Arial Black', Arial, sans-serif"
           fontWeight="900"
-          fontSize="44"
-          letterSpacing="-1.5px"
+          fontSize="46"
+          letterSpacing="-2px"
         >
           ideas
         </text>
 
-        {/* Registered symbol ® */}
-        <circle cx="174" cy="16" r="5" stroke={textColor} strokeWidth="1.2" fill="none" />
-        <text
-          x="174"
-          y="18.5"
-          fill={textColor}
-          fontFamily="system-ui, sans-serif"
-          fontWeight="700"
-          fontSize="6"
-          textAnchor="middle"
-        >
-          R
-        </text>
+        {/* Registered Symbol ® */}
+        <g transform="translate(180, 11)">
+          <circle cx="6" cy="6" r="5.5" stroke={textColor} strokeWidth="1.3" fill="none" />
+          <text
+            x="6"
+            y="8.8"
+            fill={textColor}
+            fontFamily="Arial, sans-serif"
+            fontWeight="800"
+            fontSize="6.5"
+            textAnchor="middle"
+          >
+            R
+          </text>
+        </g>
       </svg>
     </div>
   );

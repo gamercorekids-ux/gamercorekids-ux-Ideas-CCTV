@@ -178,7 +178,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onBypassLo
 
         {/* Bottom Left Footer Line & Brand Motto */}
         <div className="z-10 pt-6">
-          <div className="h-[2px] w-48 bg-gradient-to-r from-[#59B828] to-transparent mb-4"></div>
+          <div className="h-1.5 w-64 bg-[#59B828] rounded-full mb-4"></div>
           <div className="text-[11px] font-mono font-medium tracking-[0.22em] text-slate-400 uppercase">
             IDEAS &nbsp;|&nbsp; TECHNOLOGY &nbsp;|&nbsp; A SAFER TOMORROW
           </div>
