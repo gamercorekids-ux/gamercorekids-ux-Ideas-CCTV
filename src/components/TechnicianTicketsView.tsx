@@ -14,6 +14,7 @@ import {
   UserPlus
 } from 'lucide-react';
 import { Ticket, User, Location, Region } from '../types';
+import { SlaProgressBar } from './SlaProgressBar';
 
 interface TechnicianTicketsViewProps {
   tickets: Ticket[];
@@ -378,8 +379,8 @@ export const TechnicianTicketsView: React.FC<TechnicianTicketsViewProps> = ({
                         {ticket.priority}
                       </span>
                     </td>
-                    <td className="py-3.5 px-4">
-                      <span className="text-emerald-700 font-bold text-[10px]">● {ticket.sla_status}</span>
+                    <td className="py-3.5 px-4 whitespace-nowrap">
+                      <SlaProgressBar ticket={ticket} variant="compact" />
                     </td>
                     <td className="py-3.5 px-4">
                       <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-700">

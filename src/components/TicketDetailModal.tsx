@@ -13,6 +13,7 @@ import {
   Image as ImageIcon
 } from 'lucide-react';
 import { Ticket, User as AppUser } from '../types';
+import { SlaProgressBar } from './SlaProgressBar';
 
 interface TicketDetailModalProps {
   ticket: Ticket | null;
@@ -90,8 +91,8 @@ export const TicketDetailModal: React.FC<TicketDetailModalProps> = ({
         </div>
 
         {/* Operational Metadata Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl">
             <div className="text-[10px] font-bold uppercase text-slate-400">LOCATION & REGION</div>
             <div className="flex items-center gap-1.5 font-bold text-slate-900 text-xs mt-1">
               <MapPin className="w-3.5 h-3.5 text-amber-500 shrink-0" />
@@ -100,7 +101,7 @@ export const TicketDetailModal: React.FC<TicketDetailModalProps> = ({
             <div className="text-[11px] text-slate-500 mt-0.5">{ticket.region_name} Region</div>
           </div>
 
-          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+          <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl">
             <div className="text-[10px] font-bold uppercase text-slate-400">ASSIGNED OPERATOR</div>
             <div className="flex items-center gap-1.5 font-bold text-slate-900 text-xs mt-1">
               <User className="w-3.5 h-3.5 text-blue-500 shrink-0" />
@@ -122,17 +123,19 @@ export const TicketDetailModal: React.FC<TicketDetailModalProps> = ({
               ))}
             </select>
           </div>
+        </div>
 
-          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
-            <div className="text-[10px] font-bold uppercase text-slate-400">SLA RESOLUTION TIMER</div>
-            <div className="flex items-center gap-1.5 font-bold text-emerald-700 text-xs mt-1">
-              <Clock className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-              <span>{ticket.sla_status} ({ticket.sla_remaining_hours}h left)</span>
-            </div>
-            <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden mt-1.5">
-              <div className="bg-emerald-500 h-full rounded-full" style={{ width: '80%' }}></div>
+        {/* Dedicated SLA Breach Tracking & Progress Bar Section */}
+        <div className="p-4 bg-gradient-to-r from-slate-50 to-slate-100/70 border border-slate-200 rounded-2xl space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Clock className="w-4 h-4 text-emerald-600" />
+              <span className="text-xs font-bold text-slate-900 uppercase tracking-wider">
+                Priority-Based SLA Tracking & Breach Countdown
+              </span>
             </div>
           </div>
+          <SlaProgressBar ticket={ticket} variant="detailed" />
         </div>
 
         {/* Quick Lifecycle Controls */}
