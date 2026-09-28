@@ -118,8 +118,7 @@ export default function App() {
     loadData();
   }, [loadData]);
 
-  const handleLogin = async (email: string, password: string) => {
-    const user = await api.login(email, password);
+  const handleLogin = async (user: User) => {
     setCurrentUser(user);
     setActiveTab('dashboard');
     setLoading(true);
@@ -304,6 +303,9 @@ export default function App() {
   const handleAddUser = async (userData: Partial<User>) => {
     try {
       const created = await api.createUser(userData);
+      if (!created) {
+        throw new Error('User creation failed: server returned no user.');
+      }
       setUsers(prev => [...prev, created]);
     } catch (err) {
       console.error('Failed to create user:', err);
@@ -410,6 +412,12 @@ export default function App() {
     );
   }
 
+  // If no valid HttpOnly-cookie session exists, show the enterprise login page
+  // before the general application loading state.
+  if (!currentUser) {
+    return <LoginPage onLoginSuccess={handleLogin} />;
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#09151F] text-white flex flex-col items-center justify-center p-4">
@@ -420,11 +428,6 @@ export default function App() {
         <div className="text-xs text-slate-400 mt-1">Connecting to Hostinger MySQL storage engine...</div>
       </div>
     );
-  }
-
-  // If no valid HttpOnly-cookie session exists, show the enterprise login page.
-  if (!currentUser) {
-    return <LoginPage onLoginSuccess={handleLogin} />;
   }
 
   return (

@@ -52,11 +52,15 @@ export const UsersTeamsView: React.FC<UsersTeamsViewProps> = ({
   const [selectedRights, setSelectedRights] = useState<string[]>(['Tickets', 'Resolve']);
 
   const totalAuthorized = users.length;
-  const techniciansCount = users.filter(u => u.role === 'TECHNICIAN').length;
+  const techniciansCount = users.filter(u => u?.role === 'TECHNICIAN').length;
   const activeDeptsCount = departments.length;
-  const securityAdminsCount = users.filter(u => u.role === 'SUPER_ADMIN' || u.role === 'SUPERVISOR').length;
+  const securityAdminsCount = users.filter(
+    u => u?.role === 'SUPER_ADMIN' || u?.role === 'SUPERVISOR'
+  ).length;
 
   const filteredUsers = users.filter(u => {
+    if (!u) return false;
+
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       const match = u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q) || u.department_name.toLowerCase().includes(q);
@@ -103,7 +107,7 @@ export const UsersTeamsView: React.FC<UsersTeamsViewProps> = ({
       granular_rights: selectedRights,
       status: 'Active'
     };
-    if (password) payload.password_hash = password;
+    if (password) payload.password = password;
 
     if (editingUser) {
       onUpdateUser(editingUser.id, payload);
