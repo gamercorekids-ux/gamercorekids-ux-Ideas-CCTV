@@ -16,7 +16,6 @@ import {
   Building2
 } from 'lucide-react';
 import { Ticket, User, Location, Region } from '../types';
-import { SlaProgressBar } from './SlaProgressBar';
 
 interface ObservationsViewProps {
   tickets: Ticket[];
@@ -661,9 +660,17 @@ export const ObservationsView: React.FC<ObservationsViewProps> = ({
                         </select>
                       </td>
 
-                      {/* SLA Status & Priority-based Progress Bar */}
+                      {/* SLA Status Bar */}
                       <td className="py-3.5 px-4 whitespace-nowrap">
-                        <SlaProgressBar ticket={ticket} variant="compact" />
+                        <div className="space-y-1 w-32">
+                          <div className="flex items-center justify-between text-[10px]">
+                            <span className="font-bold text-emerald-700">● {ticket.sla_status}</span>
+                            <span className="text-slate-400 font-mono">{ticket.sla_remaining_hours}h left</span>
+                          </div>
+                          <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                            <div className="bg-emerald-500 h-full rounded-full" style={{ width: '75%' }}></div>
+                          </div>
+                        </div>
                       </td>
 
                       {/* Assigned Technician */}

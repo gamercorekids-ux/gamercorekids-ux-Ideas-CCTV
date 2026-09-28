@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Department,
   Region,
@@ -27,17 +27,8 @@ import { NewTicketModal } from './components/NewTicketModal';
 import { HostingerDbModal } from './components/HostingerDbModal';
 import { CommandPalette } from './components/CommandPalette';
 import { LoginPage } from './components/LoginPage';
-import { ToastProvider, useToast } from './context/ToastContext';
 
-function AppContent() {
-  const {
-    notifyTicketAssigned,
-    notifyTicketStatusChanged,
-    notifyUserStatusChanged,
-    notifySuccess,
-    notifyInfo
-  } = useToast();
-
+export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
     return sessionStorage.getItem('opsdesk_auth') === 'true';
   });
@@ -78,13 +69,8 @@ function AppContent() {
   const [isDbModalOpen, setIsDbModalOpen] = useState(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
 
-  // Reference trackers for background live toast alerts
-  const prevTicketsMapRef = useRef<Map<string, Ticket>>(new Map());
-  const prevUserRef = useRef<User | null>(null);
-  const isInitialLoadRef = useRef(true);
-
   // Load all initial data from backend
-  const loadData = useCallback(async (isBackgroundPoll = false) => {
+  const loadData = useCallback(async () => {
     try {
       const [
         deptsRes,
@@ -108,118 +94,35 @@ function AppContent() {
         api.fetchDbStatus()
       ]);
 
-      const fetchedTickets = Array.isArray(ticketsRes) ? ticketsRes : [];
-      const fetchedUsers = Array.isArray(usersRes) ? usersRes : [];
-
       setDepartments(Array.isArray(deptsRes) ? deptsRes : []);
       setRegions(Array.isArray(regsRes) ? regsRes : []);
       setLocations(Array.isArray(locsRes) ? locsRes : []);
-      setUsers(fetchedUsers);
-      setTickets(fetchedTickets);
+      setUsers(Array.isArray(usersRes) ? usersRes : []);
+      setTickets(Array.isArray(ticketsRes) ? ticketsRes : []);
       setSlaRules(Array.isArray(slaRes) ? slaRes : []);
       setAuditLogs(Array.isArray(auditRes) ? auditRes : []);
       if (settingsRes) setSettings(settingsRes);
       if (statusRes) setDbStatus(statusRes);
 
       // Keep currentUser synced
-      if (fetchedUsers.length > 0) {
-        const matched = fetchedUsers.find(u => u.id === currentUser.id);
+      if (Array.isArray(usersRes)) {
+        const matched = usersRes.find(u => u.id === currentUser.id);
         if (matched) {
-          // If background poll detected user status change
-          if (isBackgroundPoll && prevUserRef.current) {
-            if (prevUserRef.current.workload_status !== matched.workload_status) {
-              notifyUserStatusChanged(
-                matched,
-                'workload',
-                prevUserRef.current.workload_status,
-                matched.workload_status
-              );
-            }
-            if (prevUserRef.current.status !== matched.status) {
-              notifyUserStatusChanged(
-                matched,
-                'status',
-                prevUserRef.current.status,
-                matched.status
-              );
-            }
-          }
-          prevUserRef.current = matched;
           setCurrentUser(matched);
-        } else if (fetchedUsers.length > 0) {
-          setCurrentUser(fetchedUsers[0]);
+        } else if (usersRes.length > 0) {
+          setCurrentUser(usersRes[0]);
         }
       }
-
-      // Live background detection for new ticket assignments or status updates
-      if (isBackgroundPoll && !isInitialLoadRef.current) {
-        fetchedTickets.forEach(ticket => {
-          const prev = prevTicketsMapRef.current.get(ticket.id);
-          const isAssignedToCurrent =
-            ticket.assigned_technician_id === currentUser.id ||
-            ticket.assigned_technician_name === currentUser.name;
-
-          if (prev) {
-            // Check assignment change
-            const wasAssignedToCurrent =
-              prev.assigned_technician_id === currentUser.id ||
-              prev.assigned_technician_name === currentUser.name;
-
-            if (!wasAssignedToCurrent && isAssignedToCurrent) {
-              notifyTicketAssigned(ticket, 'You', (t) => {
-                setSelectedTicket(t);
-                setActiveTab('observations');
-              });
-            }
-
-            // Check status change on tickets assigned to user or created by user
-            if (prev.status !== ticket.status && (isAssignedToCurrent || ticket.created_by_user_id === currentUser.id)) {
-              notifyTicketStatusChanged(ticket, prev.status, ticket.status, (t) => {
-                setSelectedTicket(t);
-                setActiveTab('observations');
-              });
-            }
-          } else if (isAssignedToCurrent) {
-            // Brand new ticket directly assigned to current user
-            notifyTicketAssigned(ticket, 'You', (t) => {
-              setSelectedTicket(t);
-              setActiveTab('observations');
-            });
-          }
-        });
-      }
-
-      // Update ref map for next comparison
-      const newMap = new Map<string, Ticket>();
-      fetchedTickets.forEach(t => newMap.set(t.id, t));
-      prevTicketsMapRef.current = newMap;
-      isInitialLoadRef.current = false;
     } catch {
       // Gracefully continue with available state
     } finally {
       setLoading(false);
     }
-  }, [
-    activeDepartmentId,
-    currentUser.id,
-    currentUser.name,
-    notifyTicketAssigned,
-    notifyTicketStatusChanged,
-    notifyUserStatusChanged
-  ]);
+  }, [activeDepartmentId, currentUser.id]);
 
   useEffect(() => {
-    loadData(false);
+    loadData();
   }, [loadData]);
-
-  // Periodic background sync every 12 seconds to alert user on remote changes
-  useEffect(() => {
-    if (!isAuthenticated) return;
-    const interval = setInterval(() => {
-      loadData(true);
-    }, 12000);
-    return () => clearInterval(interval);
-  }, [isAuthenticated, loadData]);
 
   // Global hotkey: ⌘K to open search command palette
   useEffect(() => {
@@ -238,21 +141,6 @@ function AppContent() {
     try {
       const created = await api.createTicket(ticketData);
       setTickets(prev => [created, ...prev]);
-      prevTicketsMapRef.current.set(created.id, created);
-
-      notifySuccess(
-        `Ticket Created: ${created.ticket_number}`,
-        `${created.subject} (${created.priority} Priority)`
-      );
-
-      // If assigned directly at creation
-      if (
-        created.assigned_technician_name &&
-        (created.assigned_technician_id === currentUser.id || created.assigned_technician_name === currentUser.name)
-      ) {
-        notifyTicketAssigned(created, 'You', (t) => setSelectedTicket(t));
-      }
-
       const logs = await api.fetchAuditLogs();
       setAuditLogs(logs);
       const status = await api.fetchDbStatus();
@@ -264,25 +152,13 @@ function AppContent() {
 
   const handleUpdateTicketStatus = async (ticketId: string, status: any) => {
     try {
-      const prevTicket = tickets.find(t => t.id === ticketId);
-      const oldStatus = prevTicket ? prevTicket.status : 'OPEN';
-
       const updated = await api.updateTicket(ticketId, { status }, {
         id: currentUser.id,
         name: currentUser.name,
         role: currentUser.role
       });
-
       setTickets(prev => prev.map(t => (t.id === ticketId ? updated : t)));
-      prevTicketsMapRef.current.set(updated.id, updated);
       if (selectedTicket?.id === ticketId) setSelectedTicket(updated);
-
-      // Trigger Toast Alert
-      notifyTicketStatusChanged(updated, oldStatus, status, (t) => {
-        setSelectedTicket(t);
-        setActiveTab('observations');
-      });
-
       const logs = await api.fetchAuditLogs();
       setAuditLogs(logs);
     } catch (err) {
@@ -298,11 +174,7 @@ function AppContent() {
         role: currentUser.role
       });
       setTickets(prev => prev.map(t => (t.id === ticketId ? updated : t)));
-      prevTicketsMapRef.current.set(updated.id, updated);
       if (selectedTicket?.id === ticketId) setSelectedTicket(updated);
-
-      notifyInfo(`Priority Updated: ${updated.ticket_number}`, `Priority adjusted to ${priority}`);
-
       const logs = await api.fetchAuditLogs();
       setAuditLogs(logs);
     } catch (err) {
@@ -318,20 +190,7 @@ function AppContent() {
         { id: currentUser.id, name: currentUser.name, role: currentUser.role }
       );
       setTickets(prev => prev.map(t => (t.id === ticketId ? updated : t)));
-      prevTicketsMapRef.current.set(updated.id, updated);
       if (selectedTicket?.id === ticketId) setSelectedTicket(updated);
-
-      // Trigger Toast Alert for Assignment
-      const isAssignedToMe = techId === currentUser.id || techName === currentUser.name;
-      notifyTicketAssigned(
-        updated,
-        isAssignedToMe ? 'You' : techName,
-        (t) => {
-          setSelectedTicket(t);
-          setActiveTab('observations');
-        }
-      );
-
       const logs = await api.fetchAuditLogs();
       setAuditLogs(logs);
       const usersList = await api.fetchUsers();
@@ -345,9 +204,7 @@ function AppContent() {
     try {
       await api.deleteTicket(ticketId, { id: currentUser.id, name: currentUser.name, role: currentUser.role });
       setTickets(prev => prev.filter(t => t.id !== ticketId));
-      prevTicketsMapRef.current.delete(ticketId);
       if (selectedTicket?.id === ticketId) setSelectedTicket(null);
-      notifyInfo('Ticket Removed', `Ticket #${ticketId} was successfully deleted.`);
       const logs = await api.fetchAuditLogs();
       setAuditLogs(logs);
       const status = await api.fetchDbStatus();
@@ -376,7 +233,6 @@ function AppContent() {
           return t;
         })
       );
-      notifySuccess('Comment Recorded', 'Your update was posted to the compliance ledger.');
     } catch (err) {
       console.error('Failed to add comment:', err);
     }
@@ -386,7 +242,6 @@ function AppContent() {
     try {
       const created = await api.createLocation(loc);
       setLocations(prev => [created, ...prev]);
-      notifySuccess(`Branch Added: ${created.name}`, `Code: ${created.branch_code}`);
     } catch (err) {
       console.error('Failed to add location:', err);
     }
@@ -396,7 +251,6 @@ function AppContent() {
     try {
       const updated = await api.updateLocation(id, updates);
       setLocations(prev => prev.map(l => (l.id === id ? updated : l)));
-      notifySuccess(`Branch Updated: ${updated.name}`);
     } catch (err) {
       console.error('Failed to update location:', err);
     }
@@ -406,7 +260,6 @@ function AppContent() {
     try {
       await api.deleteLocation(id);
       setLocations(prev => prev.filter(l => l.id !== id));
-      notifyInfo('Branch Removed', 'Location removed from operational network.');
     } catch (err) {
       console.error('Failed to delete location:', err);
     }
@@ -416,7 +269,6 @@ function AppContent() {
     try {
       const created = await api.createRegion({ name, code, status: 'ACTIVE' });
       setRegions(prev => [...prev, created]);
-      notifySuccess(`Region Registered: ${created.name}`);
     } catch (err) {
       console.error('Failed to create region:', err);
     }
@@ -426,7 +278,6 @@ function AppContent() {
     try {
       await api.deleteRegion(id);
       setRegions(prev => prev.filter(r => r.id !== id));
-      notifyInfo('Region Removed', 'Regional zone removed.');
     } catch (err) {
       console.error('Failed to delete region:', err);
     }
@@ -436,7 +287,6 @@ function AppContent() {
     try {
       const created = await api.createUser(userData);
       setUsers(prev => [...prev, created]);
-      notifySuccess(`User Provisioned: ${created.name}`, `Role: ${created.role}`);
     } catch (err) {
       console.error('Failed to create user:', err);
     }
@@ -444,25 +294,8 @@ function AppContent() {
 
   const handleUpdateUser = async (id: string, updates: Partial<User>) => {
     try {
-      const targetUser = users.find(u => u.id === id);
-      const oldWorkload = targetUser?.workload_status;
-      const oldStatus = targetUser?.status;
-
       const updated = await api.updateUser(id, updates);
       setUsers(prev => prev.map(u => (u.id === id ? updated : u)));
-
-      // Alert toast when workload status or account status changes
-      if (updates.workload_status && oldWorkload && updates.workload_status !== oldWorkload) {
-        notifyUserStatusChanged(updated, 'workload', oldWorkload, updates.workload_status);
-      } else if (updates.status && oldStatus && updates.status !== oldStatus) {
-        notifyUserStatusChanged(updated, 'status', oldStatus, updates.status);
-      } else {
-        notifySuccess(`User Updated: ${updated.name}`);
-      }
-
-      if (currentUser.id === id) {
-        setCurrentUser(updated);
-      }
     } catch (err) {
       console.error('Failed to update user:', err);
     }
@@ -472,7 +305,6 @@ function AppContent() {
     try {
       await api.deleteUser(id);
       setUsers(prev => prev.filter(u => u.id !== id));
-      notifyInfo('User Account Removed');
     } catch (err) {
       console.error('Failed to delete user:', err);
     }
@@ -482,7 +314,6 @@ function AppContent() {
     try {
       const created = await api.createDepartment(deptData);
       setDepartments(prev => [...prev, created]);
-      notifySuccess(`Department Created: ${created.name}`);
     } catch (err) {
       console.error('Failed to create department:', err);
     }
@@ -492,7 +323,6 @@ function AppContent() {
     try {
       const updated = await api.updateDepartment(id, updates);
       setDepartments(prev => prev.map(d => (d.id === id ? updated : d)));
-      notifySuccess(`Department Updated: ${updated.name}`);
     } catch (err) {
       console.error('Failed to update department:', err);
     }
@@ -502,7 +332,6 @@ function AppContent() {
     try {
       await api.deleteDepartment(id);
       setDepartments(prev => prev.filter(d => d.id !== id));
-      notifyInfo('Department Removed');
     } catch (err) {
       console.error('Failed to delete department:', err);
     }
@@ -512,7 +341,6 @@ function AppContent() {
     try {
       const updated = await api.updateSlaRule(id, updates);
       setSlaRules(prev => prev.map(r => (r.id === id ? updated : r)));
-      notifySuccess(`SLA Policy Updated: ${updated.priority_tier}`);
     } catch (err) {
       console.error('Failed to update SLA rule:', err);
     }
@@ -520,9 +348,10 @@ function AppContent() {
 
   const handleUpdateSettings = async (section: string, data: any) => {
     try {
-      const updated = await api.updateSettings(section, data);
-      setSettings(updated);
-      notifySuccess('System Configuration Saved');
+      const updated = await api.updateSettings(section, data, currentUser.name);
+      setSettings(prev => (prev ? { ...prev, [section]: updated } : null));
+      const logs = await api.fetchAuditLogs();
+      setAuditLogs(logs);
     } catch (err) {
       console.error('Failed to update settings:', err);
     }
@@ -532,23 +361,24 @@ function AppContent() {
     try {
       const res = await api.saveAndSyncDb(currentUser.name);
       setDbStatus(res.status);
-      await loadData(false);
-      notifySuccess('MySQL Synchronized', 'Hostinger operational ledger is in sync.');
+      const logs = await api.fetchAuditLogs();
+      setAuditLogs(logs);
+      return res;
     } catch (err) {
-      console.error('Database sync failed:', err);
+      console.error('Failed to sync database:', err);
+      throw err;
     }
   };
 
   const activeDept = departments.find(d => d.id === activeDepartmentId) || departments[0] || {
     id: 'dept_surveillance',
-    code: 'SEC_SURV',
+    code: 'SEC',
     name: 'Security Operations & Surveillance',
-    description: 'Central Monitoring & Guard Dispatch',
+    description: 'Centralized 24/7 surveillance monitoring and physical security.',
     is_primary: true,
-    status: 'active' as const
+    status: 'active'
   };
 
-  // Loading Screen
   if (loading) {
     return (
       <div className="min-h-screen bg-[#09151F] text-white flex flex-col items-center justify-center p-4">
@@ -617,7 +447,7 @@ function AppContent() {
             onNavigateTab={tab => setActiveTab(tab)}
             onSelectTicket={t => setSelectedTicket(t)}
             onOpenDbModal={() => setIsDbModalOpen(true)}
-            onRefreshData={() => loadData(false)}
+            onRefreshData={loadData}
           />
         )}
 
@@ -767,13 +597,5 @@ function AppContent() {
         onNavigateTab={tab => setActiveTab(tab)}
       />
     </div>
-  );
-}
-
-export default function App() {
-  return (
-    <ToastProvider>
-      <AppContent />
-    </ToastProvider>
   );
 }
