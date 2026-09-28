@@ -12,7 +12,6 @@ interface HeaderProps {
   dbStatus: DbStatus | null;
   onOpenCommandPalette: () => void;
   onOpenDbModal: () => void;
-  onLogout?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -24,8 +23,7 @@ export const Header: React.FC<HeaderProps> = ({
   onLogout,
   dbStatus,
   onOpenCommandPalette,
-  onOpenDbModal,
-  onLogout
+  onOpenDbModal
 }) => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);

@@ -576,8 +576,6 @@ app.get('/api/hostinger/download/:packageType', (req: Request, res: Response) =>
   });
 });
 
-  res.status(404).json({ error: `API route not found: ${req.method} ${req.url}` });
-});
 
 // ============================================================================
 // VITE INTEGRATION (DEV & PROD)
