@@ -35,6 +35,7 @@ export interface User {
   id: string;
   name: string;
   email: string;
+  password?: string;
   password_hash?: string;
   department_id: string;
   department_name: string;
@@ -51,6 +52,23 @@ export interface User {
   compliance_percent?: number;
 }
 
+export type TicketStatus =
+  | 'NEW'
+  | 'OPEN'
+  | 'ASSIGNED'
+  | 'ACKNOWLEDGED'
+  | 'UNDER INVESTIGATION'
+  | 'IN PROGRESS'
+  | 'PENDING'
+  | 'RESOLVED'
+  | 'VERIFICATION'
+  | 'CLOSED'
+  | 'REOPENED'
+  | 'ARCHIVED';
+
+export type TicketPriority = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
+export type TicketSeverity = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
+
 export interface TicketComment {
   id: string;
   ticket_id: string;
@@ -63,6 +81,19 @@ export interface TicketComment {
   created_at: string;
 }
 
+export interface TicketHistoryItem {
+  id: string;
+  ticket_id: string;
+  action: string;
+  performed_by: string;
+  performed_by_id?: string;
+  performed_by_role?: string;
+  previous_value?: string;
+  new_value?: string;
+  reason?: string;
+  timestamp: string;
+}
+
 export interface Ticket {
   id: string;
   ticket_number: string;
@@ -70,25 +101,58 @@ export interface Ticket {
   description: string;
   department_id: string;
   department_name: string;
-  category: string;
-  priority: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
-  status: 'NEW' | 'OPEN' | 'IN PROGRESS' | 'RESOLVED' | 'CLOSED';
-  assigned_technician_id: string | null;
-  assigned_technician_name: string;
+  region_id?: string;
+  region_name: string;
   location_id: string;
   location_name: string;
-  region_name: string;
+  category: string;
+  subcategory?: string;
+  priority: TicketPriority;
+  severity?: TicketSeverity;
+  status: TicketStatus;
+  source?: string;
+  assigned_team?: string;
+  assigned_technician_id: string | null;
+  assigned_technician_name: string;
+  requester_email?: string;
+  requester_phone?: string;
+  initial_observation?: string;
+
+  // Lifecycle Resolution & Closure Fields
+  resolution_description?: string;
+  root_cause?: string;
+  corrective_action?: string;
+  resolution_category?: string;
+  resolved_by?: string | null;
+  resolved_at?: string | null;
+
+  verification_notes?: string;
+  closed_by?: string | null;
+  closed_at?: string | null;
+
+  reopened_by?: string | null;
+  reopened_reason?: string | null;
+  reopened_at?: string | null;
+
+  first_response_at?: string | null;
+  acknowledged_at?: string | null;
+  acknowledged_by?: string | null;
+
   sla_deadline: string;
   sla_status: 'ON TRACK' | 'AT RISK' | 'BREACHED' | 'COMPLETED';
   sla_remaining_hours: number;
   evidence_images: string[];
+  attachments?: string[];
+
   created_by_user_id: string;
   created_by_name: string;
+  created_by?: string;
+  reporter_id?: string;
   created_at: string;
   updated_at: string;
-  resolved_at?: string | null;
-  closed_at?: string | null;
+
   comments?: TicketComment[];
+  history?: TicketHistoryItem[];
 }
 
 export interface AuditLog {

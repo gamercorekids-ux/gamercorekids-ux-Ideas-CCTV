@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Search, Bell, CheckCircle2, AlertTriangle, Shield, RefreshCw, Database, ChevronDown, LogOut } from 'lucide-react';
 import { Department, User, DbStatus } from '../types';
+import { IdeasLogo } from './IdeasLogo';
 
 interface HeaderProps {
   currentTab: string;
@@ -42,11 +43,11 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="max-w-[1720px] mx-auto px-4 lg:px-6 h-16 flex items-center justify-between gap-4">
         {/* Left: Brand Logo & Current View */}
         <div className="flex items-center gap-3 shrink-0">
-          <div className="flex items-center gap-2 bg-[#09151F] text-white px-2.5 py-1.5 rounded-lg border border-slate-800 shadow-sm">
-            <div className="w-5 h-5 rounded-md bg-emerald-500/20 flex items-center justify-center text-emerald-400">
-              <div className="w-2.5 h-2.5 bg-emerald-400 rounded-sm"></div>
-            </div>
-            <span className="font-mono text-xs font-bold tracking-wider text-emerald-400">OPS</span>
+          <div className="flex items-center gap-2.5">
+            <IdeasLogo size="sm" glyphColor="#59B828" textColor="#59B828" />
+            <span className="inline-block px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-[#09151F] text-emerald-400 border border-slate-800 uppercase">
+              OPS
+            </span>
           </div>
 
           <div className="h-5 w-px bg-slate-200"></div>

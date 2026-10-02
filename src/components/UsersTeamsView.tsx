@@ -107,7 +107,7 @@ export const UsersTeamsView: React.FC<UsersTeamsViewProps> = ({
       granular_rights: selectedRights,
       status: 'Active'
     };
-    if (password) payload.password = password;
+    if (password) payload.password_hash = password;
 
     if (editingUser) {
       onUpdateUser(editingUser.id, payload);

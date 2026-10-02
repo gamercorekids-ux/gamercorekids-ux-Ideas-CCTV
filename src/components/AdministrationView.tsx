@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   Sliders,
   Building2,
@@ -32,9 +32,11 @@ import {
   AlertTriangle,
   Terminal,
   Layers,
-  ExternalLink
+  ExternalLink,
+  Image as ImageIcon
 } from 'lucide-react';
 import { Department, Location, SystemSettings, User, DbStatus, AuditLog } from '../types';
+import { IdeasLogo } from './IdeasLogo';
 
 interface AdministrationViewProps {
   settings: SystemSettings;
@@ -87,6 +89,77 @@ export const AdministrationView: React.FC<AdministrationViewProps> = ({
   const [heroHeight, setHeroHeight] = useState(settings?.branding?.heroHeight || 44);
   const [formHeight, setFormHeight] = useState(settings?.branding?.formHeight || 44);
   const [sidebarHeight, setSidebarHeight] = useState(settings?.branding?.sidebarHeight || 36);
+
+  // Logo Manager States
+  const [heroLogo, setHeroLogo] = useState<string | null>(() => localStorage.getItem('opsdesk_hero_logo'));
+  const [formLogo, setFormLogo] = useState<string | null>(() => localStorage.getItem('opsdesk_form_logo'));
+  const [heroLogoSize, setHeroLogoSize] = useState<number>(() => {
+    const val = localStorage.getItem('opsdesk_hero_logo_size');
+    return val ? Number(val) : 56;
+  });
+  const [formLogoSize, setFormLogoSize] = useState<number>(() => {
+    const val = localStorage.getItem('opsdesk_form_logo_size');
+    return val ? Number(val) : 48;
+  });
+
+  const heroInputRef = useRef<HTMLInputElement>(null);
+  const formInputRef = useRef<HTMLInputElement>(null);
+
+  const handleHeroUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        alert('File size exceeds 5MB limit.');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const res = event.target?.result as string;
+        setHeroLogo(res);
+        localStorage.setItem('opsdesk_hero_logo', res);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleFormUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        alert('File size exceeds 5MB limit.');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const res = event.target?.result as string;
+        setFormLogo(res);
+        localStorage.setItem('opsdesk_form_logo', res);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleRemoveHeroLogo = () => {
+    setHeroLogo(null);
+    localStorage.removeItem('opsdesk_hero_logo');
+    if (heroInputRef.current) heroInputRef.current.value = '';
+  };
+
+  const handleRemoveFormLogo = () => {
+    setFormLogo(null);
+    localStorage.removeItem('opsdesk_form_logo');
+    if (formInputRef.current) formInputRef.current.value = '';
+  };
+
+  const updateHeroLogoSize = (size: number) => {
+    setHeroLogoSize(size);
+    localStorage.setItem('opsdesk_hero_logo_size', String(size));
+  };
+
+  const updateFormLogoSize = (size: number) => {
+    setFormLogoSize(size);
+    localStorage.setItem('opsdesk_form_logo_size', String(size));
+  };
 
   // Login Studio states
   const [viewport, setViewport] = useState<'DESKTOP' | 'LAPTOP' | 'TABLET' | 'IPHONE'>('DESKTOP');
@@ -517,7 +590,19 @@ export const AdministrationView: React.FC<AdministrationViewProps> = ({
                   <input
                     type="checkbox"
                     checked={slaEngineEnabled}
-                    onChange={e => setSlaEngineEnabled(e.target.checked)}
+                    onChange={e => {
+                      const val = e.target.checked;
+                      setSlaEngineEnabled(val);
+                      onUpdateSettings('general', {
+                        appName,
+                        maintenanceMode,
+                        slaEngineEnabled: val,
+                        maxPictureSizeMb: maxPictureSize,
+                        autoCompress,
+                        strictToastWarning: strictToast
+                      });
+                      triggerSaveNotification();
+                    }}
                     className="sr-only peer"
                   />
                   <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
@@ -715,11 +800,28 @@ export const AdministrationView: React.FC<AdministrationViewProps> = ({
             </div>
           </div>
 
-          {/* Live Split-Hero Canvas & Controls (Matching Image 14) */}
+          {/* Live Split-Hero Canvas & Controls */}
           <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
             {/* Left Preview Screen */}
-            <div className="xl:col-span-8 bg-[#09151F] rounded-2xl p-6 sm:p-10 border border-slate-800 text-white relative overflow-hidden flex flex-col justify-between min-h-[360px]">
+            <div className="xl:col-span-8 bg-[#09151F] rounded-2xl p-6 sm:p-10 border border-slate-800 text-white relative overflow-hidden flex flex-col justify-between min-h-[400px]">
+              {/* Ambient Radial Glow */}
+              <div className="absolute top-1/4 -left-20 w-[350px] h-[350px] bg-[radial-gradient(circle,rgba(89,184,40,0.15)_0%,transparent_75%)] pointer-events-none blur-2xl"></div>
+
               <div className="max-w-md space-y-3 z-10">
+                {/* Hero Logo Preview */}
+                <div className="mb-3 transition-all">
+                  {heroLogo ? (
+                    <img
+                      src={heroLogo}
+                      alt="Left Hero Logo"
+                      style={{ height: `${heroLogoSize}px` }}
+                      className="w-auto object-contain rounded-lg shadow-md border border-slate-700/60 p-1 bg-slate-900/80"
+                    />
+                  ) : (
+                    <IdeasLogo height={heroLogoSize} glyphColor="#59B828" textColor="#59B828" />
+                  )}
+                </div>
+
                 <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
                   {badgeText}
                 </span>
@@ -736,14 +838,28 @@ export const AdministrationView: React.FC<AdministrationViewProps> = ({
               </div>
 
               {/* Login Form Mockup */}
-              <div className="absolute right-6 top-8 bottom-8 w-64 bg-white text-slate-900 rounded-xl p-4 shadow-2xl flex flex-col justify-center space-y-2.5 hidden sm:flex border border-slate-200">
-                <div className="text-center font-bold text-xs uppercase tracking-wider text-slate-600">
+              <div className="absolute right-6 top-6 bottom-6 w-64 bg-white text-slate-900 rounded-xl p-4 shadow-2xl flex flex-col justify-center items-center space-y-2.5 hidden sm:flex border border-slate-200">
+                {/* Form Logo Preview */}
+                <div className="mb-1 flex items-center justify-center transition-all">
+                  {formLogo ? (
+                    <img
+                      src={formLogo}
+                      alt="Right Form Logo"
+                      style={{ height: `${formLogoSize}px` }}
+                      className="w-auto object-contain rounded-lg p-0.5 border border-slate-200 shadow-2xs"
+                    />
+                  ) : (
+                    <IdeasLogo height={formLogoSize} glyphColor="#59B828" textColor="#59B828" />
+                  )}
+                </div>
+
+                <div className="text-center font-bold text-[11px] uppercase tracking-wider text-slate-600">
                   SIGN IN TO PORTAL
                 </div>
-                <div className="p-2 bg-slate-50 border border-slate-200 rounded text-xs text-slate-400 font-mono">
+                <div className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs text-slate-400 font-mono">
                   username@ideas.com.pk
                 </div>
-                <div className="p-2 bg-slate-50 border border-slate-200 rounded text-xs text-slate-400 font-mono">
+                <div className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs text-slate-400 font-mono">
                   ••••••••••••
                 </div>
                 <button className="w-full py-1.5 bg-emerald-600 text-white rounded text-xs font-bold">
@@ -757,8 +873,129 @@ export const AdministrationView: React.FC<AdministrationViewProps> = ({
             </div>
 
             {/* Right Inspector Panel */}
-            <div className="xl:col-span-4 bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-3 text-xs">
-              <div className="font-bold text-slate-900 uppercase text-[11px] tracking-wider pb-2 border-b border-slate-200">
+            <div className="xl:col-span-4 bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-4 text-xs">
+              <div className="font-bold text-slate-900 uppercase text-[11px] tracking-wider pb-2 border-b border-slate-200 flex items-center gap-2">
+                <ImageIcon className="w-3.5 h-3.5 text-emerald-600" />
+                <span>LOGO MANAGEMENT & SIZE STUDIO</span>
+              </div>
+
+              {/* Left Hero Logo Controls */}
+              <div className="p-3 bg-white border border-slate-200 rounded-xl space-y-2.5 shadow-2xs">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-800 text-[11px]">1. LEFT HERO BANNER LOGO</span>
+                  {heroLogo && (
+                    <span className="px-1.5 py-0.2 text-[9px] font-bold bg-emerald-100 text-emerald-800 rounded">
+                      Custom Uploaded
+                    </span>
+                  )}
+                </div>
+
+                <input
+                  type="file"
+                  ref={heroInputRef}
+                  accept="image/*"
+                  onChange={handleHeroUpload}
+                  className="hidden"
+                />
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => heroInputRef.current?.click()}
+                    className="flex-1 py-1.5 px-3 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <Upload className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Upload Left Logo</span>
+                  </button>
+
+                  {heroLogo && (
+                    <button
+                      type="button"
+                      onClick={handleRemoveHeroLogo}
+                      className="p-1.5 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-600 rounded-lg transition-colors cursor-pointer"
+                      title="Reset Left Logo"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between text-[11px] font-semibold text-slate-600 mb-1">
+                    <span>Increase/Decrease Size:</span>
+                    <span className="font-mono text-emerald-700 font-bold">{heroLogoSize}px</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="20"
+                    max="140"
+                    step="2"
+                    value={heroLogoSize}
+                    onChange={e => updateHeroLogoSize(Number(e.target.value))}
+                    className="w-full accent-emerald-600 cursor-pointer"
+                  />
+                </div>
+              </div>
+
+              {/* Right Form Logo Controls */}
+              <div className="p-3 bg-white border border-slate-200 rounded-xl space-y-2.5 shadow-2xs">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-800 text-[11px]">2. RIGHT FORM HEADER LOGO</span>
+                  {formLogo && (
+                    <span className="px-1.5 py-0.2 text-[9px] font-bold bg-emerald-100 text-emerald-800 rounded">
+                      Custom Uploaded
+                    </span>
+                  )}
+                </div>
+
+                <input
+                  type="file"
+                  ref={formInputRef}
+                  accept="image/*"
+                  onChange={handleFormUpload}
+                  className="hidden"
+                />
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => formInputRef.current?.click()}
+                    className="flex-1 py-1.5 px-3 bg-blue-50 hover:bg-blue-100 border border-blue-300 text-blue-800 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <Upload className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Upload Form Logo</span>
+                  </button>
+
+                  {formLogo && (
+                    <button
+                      type="button"
+                      onClick={handleRemoveFormLogo}
+                      className="p-1.5 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-600 rounded-lg transition-colors cursor-pointer"
+                      title="Reset Form Logo"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between text-[11px] font-semibold text-slate-600 mb-1">
+                    <span>Increase/Decrease Size:</span>
+                    <span className="font-mono text-blue-700 font-bold">{formLogoSize}px</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="20"
+                    max="140"
+                    step="2"
+                    value={formLogoSize}
+                    onChange={e => updateFormLogoSize(Number(e.target.value))}
+                    className="w-full accent-blue-600 cursor-pointer"
+                  />
+                </div>
+              </div>
+
+              <div className="font-bold text-slate-900 uppercase text-[11px] tracking-wider pt-2 border-t border-slate-200">
                 Text Content Settings
               </div>
 
@@ -795,7 +1032,7 @@ export const AdministrationView: React.FC<AdministrationViewProps> = ({
               <div>
                 <label className="font-semibold text-slate-700 block mb-1">Introductory Subtext Description</label>
                 <textarea
-                  rows={3}
+                  rows={2}
                   value={subtextDesc}
                   onChange={e => setSubtextDesc(e.target.value)}
                   className="w-full px-3 py-1.5 border border-slate-200 rounded-lg bg-white text-xs"
@@ -804,9 +1041,9 @@ export const AdministrationView: React.FC<AdministrationViewProps> = ({
 
               <button
                 onClick={handleSaveBranding}
-                className="w-full py-2 bg-[#0F2942] hover:bg-[#163859] text-white rounded-lg font-semibold shadow-2xs mt-2"
+                className="w-full py-2 bg-[#0F2942] hover:bg-[#163859] text-white rounded-lg font-semibold shadow-2xs mt-2 cursor-pointer"
               >
-                Apply Live Preview
+                Save & Apply Live Settings
               </button>
             </div>
           </div>

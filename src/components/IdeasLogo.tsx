@@ -3,6 +3,7 @@ import React from 'react';
 interface IdeasLogoProps {
   className?: string;
   size?: 'sm' | 'md' | 'lg' | 'xl';
+  height?: number;
   textColor?: string;
   glyphColor?: string;
   showBadge?: boolean;
@@ -11,10 +12,11 @@ interface IdeasLogoProps {
 export const IdeasLogo: React.FC<IdeasLogoProps> = ({
   className = '',
   size = 'md',
+  height,
   glyphColor = '#59B828',
   textColor = '#59B828'
 }) => {
-  // Dimensions based on size
+  // Dimensions based on size or custom height
   const heights = {
     sm: 24,
     md: 36,
@@ -22,7 +24,7 @@ export const IdeasLogo: React.FC<IdeasLogoProps> = ({
     xl: 60
   };
 
-  const h = heights[size] || 36;
+  const h = height || heights[size] || 36;
   const w = Math.round(h * 3.4);
 
   return (

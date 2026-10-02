@@ -61,7 +61,7 @@ function requireAuth(
   }
 
   try {
-    const payload = jwt.verify(token, JWT_SECRET) as {
+    const payload = jwt.verify(token, JWT_SECRET!) as {
       sub?: string;
       role?: string;
     };
