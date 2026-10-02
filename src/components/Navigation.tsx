@@ -28,13 +28,15 @@ interface NavigationProps {
   onTabChange: (tab: TabId) => void;
   currentUser: User;
   ticketsCount: number;
+  slaEngineEnabled?: boolean;
 }
 
 export const Navigation: React.FC<NavigationProps> = ({
   activeTab,
   onTabChange,
   currentUser,
-  ticketsCount
+  ticketsCount,
+  slaEngineEnabled = true
 }) => {
   const tabs: { id: TabId; label: string; icon: React.ComponentType<any>; badge?: number; minRole?: string }[] = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -50,13 +52,21 @@ export const Navigation: React.FC<NavigationProps> = ({
 
   // Filter based on user role (Super Admins see all, supervisors see operational tabs, technicians see assigned)
   const isSuperAdmin = currentUser.role === 'SUPER_ADMIN';
+  const isTechnician = currentUser.role === 'TECHNICIAN';
 
   return (
     <nav className="bg-[#09151F] text-slate-300 border-b border-slate-800 shadow-md">
       <div className="max-w-[1720px] mx-auto px-4 lg:px-6">
         <div className="flex items-center gap-1.5 py-2 overflow-x-auto no-scrollbar">
           {tabs.map(tab => {
+            // Technicians can ONLY see Dashboard and Technician Tickets
+            if (isTechnician && tab.id !== 'dashboard' && tab.id !== 'technician-tickets') {
+              return null;
+            }
             if (tab.minRole === 'SUPER_ADMIN' && !isSuperAdmin) {
+              return null;
+            }
+            if (tab.id === 'sla-engine' && !slaEngineEnabled) {
               return null;
             }
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   Video,
   Bell,
@@ -11,7 +11,10 @@ import {
   EyeOff,
   ArrowRight,
   Shield,
-  AlertCircle
+  AlertCircle,
+  Upload,
+  Trash2,
+  Image as ImageIcon
 } from 'lucide-react';
 import { IdeasLogo } from './IdeasLogo';
 
@@ -28,6 +31,18 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
   const [showForgotModal, setShowForgotModal] = useState(false);
   const [showLangMenu, setShowLangMenu] = useState(false);
   const [selectedLang, setSelectedLang] = useState('English');
+
+  // Separate logo image states & sizes stored in localStorage
+  const [heroLogo, setHeroLogo] = useState<string | null>(() => localStorage.getItem('opsdesk_hero_logo'));
+  const [formLogo, setFormLogo] = useState<string | null>(() => localStorage.getItem('opsdesk_form_logo'));
+  const [heroLogoSize, setHeroLogoSize] = useState<number>(() => {
+    const val = localStorage.getItem('opsdesk_hero_logo_size');
+    return val ? Number(val) : 56;
+  });
+  const [formLogoSize, setFormLogoSize] = useState<number>(() => {
+    const val = localStorage.getItem('opsdesk_form_logo_size');
+    return val ? Number(val) : 48;
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,7 +91,16 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
         {/* Top: Logo & Enterprise Portal Badge */}
         <div className="space-y-4 z-10">
           <div className="flex items-center gap-3">
-            <IdeasLogo size="lg" glyphColor="#59B828" textColor="#59B828" />
+            {heroLogo ? (
+              <img
+                src={heroLogo}
+                alt="Surveillance Operations Logo"
+                style={{ height: `${heroLogoSize}px` }}
+                className="w-auto object-contain rounded-lg"
+              />
+            ) : (
+              <IdeasLogo height={heroLogoSize} glyphColor="#59B828" textColor="#59B828" />
+            )}
           </div>
 
           <div>
@@ -187,9 +211,18 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
 
         {/* Center: Centered Login Card */}
         <div className="my-auto max-w-[420px] w-full mx-auto z-10 py-6">
-          {/* Logo on Right Form Side (Matching Image) */}
-          <div className="mb-6">
-            <IdeasLogo size="md" glyphColor="#59B828" textColor="#59B828" />
+          {/* Logo on Right Form Side */}
+          <div className="mb-6 flex items-center gap-3">
+            {formLogo ? (
+              <img
+                src={formLogo}
+                alt="Welcome Back Logo"
+                style={{ height: `${formLogoSize}px` }}
+                className="w-auto object-contain rounded-lg"
+              />
+            ) : (
+              <IdeasLogo height={formLogoSize} glyphColor="#59B828" textColor="#59B828" />
+            )}
           </div>
 
           <div className="space-y-1 mb-8">

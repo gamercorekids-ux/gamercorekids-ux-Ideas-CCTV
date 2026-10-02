@@ -19,6 +19,7 @@ interface NewTicketModalProps {
   currentUser: User;
   onClose: () => void;
   onSubmit: (ticketData: Partial<Ticket>) => void;
+  slaEngineEnabled?: boolean;
 }
 
 export const NewTicketModal: React.FC<NewTicketModalProps> = ({
@@ -27,7 +28,8 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
   users,
   currentUser,
   onClose,
-  onSubmit
+  onSubmit,
+  slaEngineEnabled = true
 }) => {
   const [subject, setSubject] = useState('');
   const [description, setDescription] = useState('');
@@ -292,13 +294,15 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
           </div>
 
           {/* SLA Rule Summary Preview */}
-          <div className="p-3 bg-emerald-50/60 border border-emerald-200 rounded-xl flex items-center justify-between text-[11px]">
-            <span className="text-emerald-900 font-semibold flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Calculated Resolution SLA:</span>
-            </span>
-            <span className="font-bold text-emerald-800 font-mono">{slaEstimates[priority]}</span>
-          </div>
+          {slaEngineEnabled && (
+            <div className="p-3 bg-emerald-50/60 border border-emerald-200 rounded-xl flex items-center justify-between text-[11px]">
+              <span className="text-emerald-900 font-semibold flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Calculated Resolution SLA:</span>
+              </span>
+              <span className="font-bold text-emerald-800 font-mono">{slaEstimates[priority]}</span>
+            </div>
+          )}
 
           <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
             <button

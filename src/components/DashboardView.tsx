@@ -26,6 +26,7 @@ interface DashboardViewProps {
   onSelectTicket: (ticket: Ticket) => void;
   onOpenDbModal: () => void;
   onRefreshData: () => void;
+  slaEngineEnabled?: boolean;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -37,7 +38,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onNavigateTab,
   onSelectTicket,
   onOpenDbModal,
-  onRefreshData
+  onRefreshData,
+  slaEngineEnabled = true
 }) => {
   const [autoRefreshActive, setAutoRefreshActive] = useState(true);
   const [countdown, setCountdown] = useState(18);
@@ -124,7 +126,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             onClick={() => onNavigateTab('observations')}
             className="px-4 py-2 text-xs font-semibold rounded-lg text-slate-600 hover:text-slate-900 hover:bg-white/80 transition-colors flex items-center gap-2"
           >
-            <span>Ticket Queue & SLAs</span>
+            <span>{slaEngineEnabled ? 'Ticket Queue & SLAs' : 'Ticket Queue'}</span>
           </button>
         </div>
       </div>
@@ -202,6 +204,54 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <Server className="w-3.5 h-3.5 text-sky-600" />
             <span>API Status: Online (200 OK)</span>
           </div>
+        </div>
+      </div>
+
+      {/* 2.5 Metrics Bar (Matching Image) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
+        {/* Card 1: Observations logged */}
+        <div className="bg-white border border-slate-200 border-t-2 border-t-slate-700 rounded-2xl p-4 shadow-2xs flex flex-col justify-between">
+          <div className="text-xs font-semibold text-slate-500">Observations logged</div>
+          <div className="text-2xl sm:text-3xl font-extrabold text-slate-900 my-1 tabular-nums">
+            {totalObservations}
+          </div>
+          <div className="text-[11px] text-slate-400 font-medium">in selected range</div>
+        </div>
+
+        {/* Card 2: Open incidents */}
+        <div className="bg-white border border-slate-200 border-t-2 border-t-rose-500 rounded-2xl p-4 shadow-2xs flex flex-col justify-between">
+          <div className="text-xs font-semibold text-slate-500">Open incidents</div>
+          <div className="text-2xl sm:text-3xl font-extrabold text-rose-600 my-1 tabular-nums">
+            {openTickets}
+          </div>
+          <div className="text-[11px] text-slate-400 font-medium">unresolved</div>
+        </div>
+
+        {/* Card 3: Open tickets */}
+        <div className="bg-white border border-slate-200 border-t-2 border-t-amber-500 rounded-2xl p-4 shadow-2xs flex flex-col justify-between">
+          <div className="text-xs font-semibold text-slate-500">Open tickets</div>
+          <div className="text-2xl sm:text-3xl font-extrabold text-amber-600 my-1 tabular-nums">
+            {activeTickets}
+          </div>
+          <div className="text-[11px] text-slate-400 font-medium">technician requests</div>
+        </div>
+
+        {/* Card 4: Cameras repaired */}
+        <div className="bg-white border border-slate-200 border-t-2 border-t-emerald-500 rounded-2xl p-4 shadow-2xs flex flex-col justify-between">
+          <div className="text-xs font-semibold text-slate-500">Cameras repaired</div>
+          <div className="text-2xl sm:text-3xl font-extrabold text-emerald-600 my-1 tabular-nums">
+            {closedTickets}
+          </div>
+          <div className="text-[11px] text-slate-400 font-medium">by technicians</div>
+        </div>
+
+        {/* Card 5: Branches reporting */}
+        <div className="bg-white border border-slate-200 border-t-2 border-t-purple-500 rounded-2xl p-4 shadow-2xs flex flex-col justify-between">
+          <div className="text-xs font-semibold text-slate-500">Branches reporting</div>
+          <div className="text-2xl sm:text-3xl font-extrabold text-purple-600 my-1 tabular-nums">
+            {locations.length > 0 ? locations.length : 95}
+          </div>
+          <div className="text-[11px] text-slate-400 font-medium">with activity</div>
         </div>
       </div>
 
@@ -503,8 +553,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       </div>
 
-      {/* 5. Bottom Row: Top 10 Branches, AI Analytics & Technician Matrix (Image 2) */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+      {/* 5. Bottom Row: Top 10 Branches */}
+      <div className="grid grid-cols-1 gap-6">
         {/* Top 10 Tickets Branch-Wise Bar Chart */}
         <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-2xs">
           <div className="flex items-center justify-between mb-4">
@@ -540,62 +590,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <span className="text-[11px] font-mono text-slate-400 w-4 text-right">{branch.count}</span>
               </div>
             ))}
-          </div>
-        </div>
-
-        {/* AI Analytics & Operational Insights */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-2xs flex flex-col justify-between">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <Cpu className="w-4 h-4 text-blue-600" />
-              <h4 className="text-sm font-bold text-slate-900">AI Analytics & Operational Insights</h4>
-            </div>
-            <p className="text-[11px] text-slate-500 mb-4">
-              Automated anomaly detection and telemetry metrics from live database records.
-            </p>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
-                  <div className="text-xs font-bold text-slate-800">GENERAL represents 100% of overall ticket volume.</div>
-                  <div className="text-[11px] text-slate-500 mt-0.5">Live database analysis indicates 1 tickets categorized under GENERAL.</div>
-                </div>
-
-                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
-                  <div className="text-xs font-bold text-slate-800">Agency Jaranwala reported highest ticket volume (1 tickets).</div>
-                </div>
-
-                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
-                  <div className="text-xs font-bold text-slate-800">Zero critical SLA breach alerts detected across active tickets.</div>
-                </div>
-
-                <div className="p-3 bg-emerald-50/70 border border-emerald-200 rounded-xl">
-                  <div className="text-xs font-bold text-emerald-800">CCTV Health: 249 of 252 camera streams currently active (99% online).</div>
-                </div>
-              </div>
-
-              {/* Forecast Projection Curve */}
-              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex flex-col justify-between">
-                <div className="text-[11px] font-bold text-slate-700">Forecast to predictive resolution</div>
-                <div className="h-28 w-full flex items-end my-2">
-                  <svg className="w-full h-full" viewBox="0 0 200 80">
-                    <line x1="0" y1="70" x2="200" y2="70" stroke="#cbd5e1" strokeWidth="1" />
-                    <line x1="0" y1="40" x2="200" y2="40" stroke="#e2e8f0" strokeWidth="1" strokeDasharray="3,3" />
-                    <line x1="0" y1="10" x2="200" y2="10" stroke="#e2e8f0" strokeWidth="1" strokeDasharray="3,3" />
-                    <path
-                      d="M 10,68 Q 100,68 190,65"
-                      fill="none"
-                      stroke="#d97706"
-                      strokeWidth="2"
-                    />
-                  </svg>
-                </div>
-                <div className="flex items-center justify-between text-[9px] font-mono text-slate-400">
-                  <span>Projection Curve</span>
-                  <span>Timeline</span>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
       </div>
@@ -654,39 +648,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               ))}
             </tbody>
           </table>
-        </div>
-      </div>
-
-      {/* 7. Bottom Metric Strip with Accent Line Borders */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        <div className="bg-white border-t-2 border-t-slate-800 border border-slate-200 rounded-xl p-4 shadow-2xs">
-          <div className="text-[11px] font-medium text-slate-500">Observations logged</div>
-          <div className="text-2xl font-extrabold text-slate-900 my-0.5 tabular-nums">{totalObservations}</div>
-          <div className="text-[10px] text-slate-400">in selected range</div>
-        </div>
-
-        <div className="bg-white border-t-2 border-t-rose-500 border border-slate-200 rounded-xl p-4 shadow-2xs">
-          <div className="text-[11px] font-medium text-slate-500">Open incidents</div>
-          <div className="text-2xl font-extrabold text-rose-600 my-0.5 tabular-nums">0</div>
-          <div className="text-[10px] text-slate-400">unresolved</div>
-        </div>
-
-        <div className="bg-white border-t-2 border-t-amber-500 border border-slate-200 rounded-xl p-4 shadow-2xs">
-          <div className="text-[11px] font-medium text-slate-500">Open tickets</div>
-          <div className="text-2xl font-extrabold text-amber-600 my-0.5 tabular-nums">{openTickets}</div>
-          <div className="text-[10px] text-slate-400">technician requests</div>
-        </div>
-
-        <div className="bg-white border-t-2 border-t-emerald-500 border border-slate-200 rounded-xl p-4 shadow-2xs">
-          <div className="text-[11px] font-medium text-slate-500">Cameras repaired</div>
-          <div className="text-2xl font-extrabold text-emerald-600 my-0.5 tabular-nums">{closedTickets}</div>
-          <div className="text-[10px] text-slate-400">by technicians</div>
-        </div>
-
-        <div className="bg-white border-t-2 border-t-purple-500 border border-slate-200 rounded-xl p-4 shadow-2xs">
-          <div className="text-[11px] font-medium text-slate-500">Branches reporting</div>
-          <div className="text-2xl font-extrabold text-purple-600 my-0.5 tabular-nums">{locations.length}</div>
-          <div className="text-[10px] text-slate-400">with activity</div>
         </div>
       </div>
     </div>

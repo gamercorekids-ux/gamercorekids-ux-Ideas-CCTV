@@ -712,7 +712,15 @@ class DatabaseManager {
   private departments: Department[] = [...INITIAL_DEPARTMENTS];
   private regions: Region[] = [...INITIAL_REGIONS];
   private locations: Location[] = generateInitialLocations();
-  private users: User[] = [...INITIAL_USERS];
+  private users: User[] = INITIAL_USERS.map(u => ({
+    ...u,
+    password_hash:
+      u.password_hash.startsWith('$2a$') ||
+      u.password_hash.startsWith('$2b$') ||
+      u.password_hash.startsWith('$2y$')
+        ? u.password_hash
+        : bcrypt.hashSync(u.password_hash || '@dm!n#+390++--', 12)
+  }));
   private slaRules: SlaRule[] = [...INITIAL_SLA_RULES];
   private tickets: Ticket[] = [...INITIAL_TICKETS];
   private auditLogs: AuditLog[] = [...INITIAL_AUDIT_LOGS];
@@ -886,11 +894,11 @@ if (usrs && usrs.length > 0) {
 
     if (!isValidBcrypt) {
       // Existing installation used plaintext passwords.
-      // The original seeded password was Password123!.
+      // The default seeded password is @dm!n#+390++--.
       const passwordToHash =
         passwordHash.startsWith('$2')
-          ? 'Password123!'
-          : (passwordHash || 'Password123!');
+          ? '@dm!n#+390++--'
+          : (passwordHash || '@dm!n#+390++--');
 
       passwordHash = bcrypt.hashSync(passwordToHash, 12);
 
@@ -1134,7 +1142,7 @@ if (usrs && usrs.length > 0) {
       suppliedPassword.startsWith('$2y$')
         ? suppliedPassword
         : bcrypt.hashSync(
-            suppliedPassword || 'Password123!',
+            suppliedPassword || '@dm!n#+390++--',
             12
           );
 

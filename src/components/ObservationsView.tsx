@@ -13,7 +13,12 @@ import {
   Store,
   ChevronDown,
   Check,
-  Building2
+  Building2,
+  ShieldAlert,
+  AlertTriangle,
+  User as UserIcon,
+  MapPin,
+  Calendar
 } from 'lucide-react';
 import { Ticket, User, Location, Region } from '../types';
 
@@ -29,6 +34,7 @@ interface ObservationsViewProps {
   onUpdateTicketPriority: (ticketId: string, priority: any) => void;
   onAssignTechnician: (ticketId: string, technicianId: string, technicianName: string) => void;
   onDeleteTicket: (ticketId: string) => void;
+  slaEngineEnabled?: boolean;
 }
 
 export const ObservationsView: React.FC<ObservationsViewProps> = ({
@@ -42,7 +48,8 @@ export const ObservationsView: React.FC<ObservationsViewProps> = ({
   onUpdateTicketStatus,
   onUpdateTicketPriority,
   onAssignTechnician,
-  onDeleteTicket
+  onDeleteTicket,
+  slaEngineEnabled = true
 }) => {
   const [selectedFilter, setSelectedFilter] = useState<'all' | 'new' | 'open' | 'in_progress' | 'resolved' | 'closed'>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -380,7 +387,7 @@ export const ObservationsView: React.FC<ObservationsViewProps> = ({
             <select className="px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none">
               <option>All Views & Filters</option>
               <option>My Assigned Tickets</option>
-              <option>SLA At Risk</option>
+              {slaEngineEnabled && <option>SLA At Risk</option>}
               <option>Critical & High Priority</option>
             </select>
 
@@ -397,32 +404,43 @@ export const ObservationsView: React.FC<ObservationsViewProps> = ({
         {/* Row 2: Secondary Dropdown Filters */}
         {showAdvancedFilters && (
           <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3 pt-3 border-t border-slate-100">
-            <div>
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
-                STATUS
-              </label>
+            {/* 1. STATUS */}
+            <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-2xs flex flex-col justify-between hover:border-slate-300 transition-colors">
+              <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                <ShieldAlert className="w-3.5 h-3.5 text-indigo-600" />
+                <span>STATUS</span>
+              </div>
               <select
                 value={statusFilter}
                 onChange={e => setStatusFilter(e.target.value)}
-                className="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none"
+                className="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-800 font-semibold focus:outline-none focus:bg-white cursor-pointer"
               >
                 <option value="ALL">All Statuses</option>
                 <option value="NEW">NEW</option>
                 <option value="OPEN">OPEN</option>
+                <option value="ASSIGNED">ASSIGNED</option>
+                <option value="ACKNOWLEDGED">ACKNOWLEDGED</option>
+                <option value="UNDER INVESTIGATION">UNDER INVESTIGATION</option>
                 <option value="IN PROGRESS">IN PROGRESS</option>
+                <option value="PENDING">PENDING</option>
                 <option value="RESOLVED">RESOLVED</option>
+                <option value="VERIFICATION">VERIFICATION</option>
                 <option value="CLOSED">CLOSED</option>
+                <option value="REOPENED">REOPENED</option>
+                <option value="ARCHIVED">ARCHIVED</option>
               </select>
             </div>
 
-            <div>
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
-                PRIORITY
-              </label>
+            {/* 2. PRIORITY */}
+            <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-2xs flex flex-col justify-between hover:border-slate-300 transition-colors">
+              <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+                <span>PRIORITY</span>
+              </div>
               <select
                 value={priorityFilter}
                 onChange={e => setPriorityFilter(e.target.value)}
-                className="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none"
+                className="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-800 font-semibold focus:outline-none focus:bg-white cursor-pointer"
               >
                 <option value="ALL">All Priorities</option>
                 <option value="CRITICAL">CRITICAL</option>
@@ -432,14 +450,16 @@ export const ObservationsView: React.FC<ObservationsViewProps> = ({
               </select>
             </div>
 
-            <div>
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
-                TECHNICIAN
-              </label>
+            {/* 3. TECHNICIAN */}
+            <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-2xs flex flex-col justify-between hover:border-slate-300 transition-colors">
+              <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                <UserIcon className="w-3.5 h-3.5 text-emerald-600" />
+                <span>TECHNICIAN</span>
+              </div>
               <select
                 value={technicianFilter}
                 onChange={e => setTechnicianFilter(e.target.value)}
-                className="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none"
+                className="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-800 font-semibold focus:outline-none focus:bg-white cursor-pointer"
               >
                 <option value="ALL">All Technicians</option>
                 {users.map(u => (
@@ -450,14 +470,16 @@ export const ObservationsView: React.FC<ObservationsViewProps> = ({
               </select>
             </div>
 
-            <div>
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
-                REGION
-              </label>
+            {/* 4. REGION */}
+            <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-2xs flex flex-col justify-between hover:border-slate-300 transition-colors">
+              <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                <MapPin className="w-3.5 h-3.5 text-purple-600" />
+                <span>REGION</span>
+              </div>
               <select
                 value={regionFilter}
                 onChange={e => setRegionFilter(e.target.value)}
-                className="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none"
+                className="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-800 font-semibold focus:outline-none focus:bg-white cursor-pointer"
               >
                 <option value="ALL">All Regions</option>
                 {regions.map(r => (
@@ -468,14 +490,16 @@ export const ObservationsView: React.FC<ObservationsViewProps> = ({
               </select>
             </div>
 
-            <div>
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
-                BRANCH
-              </label>
+            {/* 5. BRANCH */}
+            <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-2xs flex flex-col justify-between hover:border-slate-300 transition-colors">
+              <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                <Building2 className="w-3.5 h-3.5 text-blue-600" />
+                <span>BRANCH</span>
+              </div>
               <select
                 value={branchFilter}
                 onChange={e => setBranchFilter(e.target.value)}
-                className="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none"
+                className="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-800 font-semibold focus:outline-none focus:bg-white cursor-pointer"
               >
                 <option value="ALL">All Branches ({locations.length})</option>
                 {locations.slice(0, 30).map(loc => (
@@ -486,14 +510,16 @@ export const ObservationsView: React.FC<ObservationsViewProps> = ({
               </select>
             </div>
 
-            <div>
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
-                DATE RANGE
-              </label>
+            {/* 6. DATE RANGE */}
+            <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-2xs flex flex-col justify-between hover:border-slate-300 transition-colors">
+              <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                <Clock className="w-3.5 h-3.5 text-teal-600" />
+                <span>DATE RANGE</span>
+              </div>
               <select
                 value={dateRangeFilter}
                 onChange={e => setDateRangeFilter(e.target.value)}
-                className="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none"
+                className="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-800 font-semibold focus:outline-none focus:bg-white cursor-pointer"
               >
                 <option value="ALL">All Time</option>
                 <option value="TODAY">Today</option>
@@ -552,7 +578,7 @@ export const ObservationsView: React.FC<ObservationsViewProps> = ({
                 <th className="py-3.5 px-4">SUBJECT / TITLE</th>
                 <th className="py-3.5 px-4">STATUS</th>
                 <th className="py-3.5 px-4">PRIORITY</th>
-                <th className="py-3.5 px-4">SLA STATUS</th>
+                {slaEngineEnabled && <th className="py-3.5 px-4">SLA STATUS</th>}
                 <th className="py-3.5 px-4">ASSIGNED TECHNICIAN</th>
                 <th className="py-3.5 px-4">LOCATION / SITE</th>
                 <th className="py-3.5 px-4 text-right">ACTIONS</th>
@@ -582,10 +608,17 @@ export const ObservationsView: React.FC<ObservationsViewProps> = ({
                   const statusStyles = {
                     NEW: 'bg-blue-50 text-blue-700 border-blue-200',
                     OPEN: 'bg-sky-50 text-sky-700 border-sky-200',
+                    ASSIGNED: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+                    ACKNOWLEDGED: 'bg-teal-50 text-teal-700 border-teal-200',
+                    'UNDER INVESTIGATION': 'bg-cyan-50 text-cyan-700 border-cyan-200',
                     'IN PROGRESS': 'bg-amber-50 text-amber-700 border-amber-200',
+                    PENDING: 'bg-orange-50 text-orange-700 border-orange-200',
                     RESOLVED: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-                    CLOSED: 'bg-slate-100 text-slate-700 border-slate-200'
-                  }[ticket.status];
+                    VERIFICATION: 'bg-purple-50 text-purple-700 border-purple-200',
+                    CLOSED: 'bg-slate-100 text-slate-700 border-slate-200',
+                    REOPENED: 'bg-rose-100 text-rose-800 border-rose-200',
+                    ARCHIVED: 'bg-slate-200 text-slate-800 border-slate-300'
+                  }[ticket.status] || 'bg-slate-100 text-slate-700 border-slate-200';
 
                   return (
                     <tr
@@ -640,9 +673,16 @@ export const ObservationsView: React.FC<ObservationsViewProps> = ({
                         >
                           <option value="NEW">NEW</option>
                           <option value="OPEN">OPEN</option>
+                          <option value="ASSIGNED">ASSIGNED</option>
+                          <option value="ACKNOWLEDGED">ACKNOWLEDGED</option>
+                          <option value="UNDER INVESTIGATION">UNDER INVESTIGATION</option>
                           <option value="IN PROGRESS">IN PROGRESS</option>
+                          <option value="PENDING">PENDING</option>
                           <option value="RESOLVED">RESOLVED</option>
+                          <option value="VERIFICATION">VERIFICATION</option>
                           <option value="CLOSED">CLOSED</option>
+                          <option value="REOPENED">REOPENED</option>
+                          <option value="ARCHIVED">ARCHIVED</option>
                         </select>
                       </td>
 
@@ -661,17 +701,19 @@ export const ObservationsView: React.FC<ObservationsViewProps> = ({
                       </td>
 
                       {/* SLA Status Bar */}
-                      <td className="py-3.5 px-4 whitespace-nowrap">
-                        <div className="space-y-1 w-32">
-                          <div className="flex items-center justify-between text-[10px]">
-                            <span className="font-bold text-emerald-700">● {ticket.sla_status}</span>
-                            <span className="text-slate-400 font-mono">{ticket.sla_remaining_hours}h left</span>
+                      {slaEngineEnabled && (
+                        <td className="py-3.5 px-4 whitespace-nowrap">
+                          <div className="space-y-1 w-32">
+                            <div className="flex items-center justify-between text-[10px]">
+                              <span className="font-bold text-emerald-700">● {ticket.sla_status}</span>
+                              <span className="text-slate-400 font-mono">{ticket.sla_remaining_hours}h left</span>
+                            </div>
+                            <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                              <div className="bg-emerald-500 h-full rounded-full" style={{ width: '75%' }}></div>
+                            </div>
                           </div>
-                          <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                            <div className="bg-emerald-500 h-full rounded-full" style={{ width: '75%' }}></div>
-                          </div>
-                        </div>
-                      </td>
+                        </td>
+                      )}
 
                       {/* Assigned Technician */}
                       <td className="py-3.5 px-4 whitespace-nowrap relative">

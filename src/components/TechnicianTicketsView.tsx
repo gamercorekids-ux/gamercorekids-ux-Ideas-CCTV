@@ -11,7 +11,11 @@ import {
   CheckCircle2,
   AlertCircle,
   Store,
-  UserPlus
+  UserPlus,
+  AlertTriangle,
+  User as UserIcon,
+  MapPin,
+  Building2
 } from 'lucide-react';
 import { Ticket, User, Location, Region } from '../types';
 
@@ -27,6 +31,7 @@ interface TechnicianTicketsViewProps {
   onUpdateTicketPriority: (ticketId: string, priority: any) => void;
   onAssignTechnician: (ticketId: string, technicianId: string, technicianName: string) => void;
   onDeleteTicket: (ticketId: string) => void;
+  slaEngineEnabled?: boolean;
 }
 
 export const TechnicianTicketsView: React.FC<TechnicianTicketsViewProps> = ({
@@ -40,14 +45,34 @@ export const TechnicianTicketsView: React.FC<TechnicianTicketsViewProps> = ({
   onUpdateTicketStatus,
   onUpdateTicketPriority,
   onAssignTechnician,
-  onDeleteTicket
+  onDeleteTicket,
+  slaEngineEnabled = true
 }) => {
   const [selectedFilter, setSelectedFilter] = useState<'all' | 'new' | 'open' | 'in_progress' | 'resolved' | 'closed'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTechnicianId, setSelectedTechnicianId] = useState<string>(currentUser.id);
+  const [statusFilter, setStatusFilter] = useState('ALL');
+  const [priorityFilter, setPriorityFilter] = useState('ALL');
+  const [technicianFilter, setTechnicianFilter] = useState('ALL');
+  const [regionFilter, setRegionFilter] = useState('ALL');
+  const [branchFilter, setBranchFilter] = useState('ALL');
+  const [dateRangeFilter, setDateRangeFilter] = useState('ALL');
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(true);
 
   // Filter to tickets for selected technician or current user
   const myTickets = tickets.filter(t => {
+    if (currentUser.role === 'TECHNICIAN') {
+      const isAssigned = t.assigned_technician_id === currentUser.id;
+      const isCreatedByUserId = t.created_by_user_id === currentUser.id;
+      const isReporter = t.reporter_id === currentUser.id;
+      const isCreatedByName = (t.created_by_name && t.created_by_name.toLowerCase() === currentUser.name.toLowerCase()) ||
+                              (t.created_by && t.created_by.toLowerCase() === currentUser.name.toLowerCase());
+      const isCreatedByEmail = currentUser.email && (
+        (t.created_by && t.created_by.toLowerCase() === currentUser.email.toLowerCase()) ||
+        (t.requester_email && t.requester_email.toLowerCase() === currentUser.email.toLowerCase())
+      );
+      return isAssigned || isCreatedByUserId || isReporter || isCreatedByName || isCreatedByEmail;
+    }
     if (selectedTechnicianId === 'ALL') return true;
     return t.assigned_technician_id === selectedTechnicianId;
   });
@@ -68,12 +93,21 @@ export const TechnicianTicketsView: React.FC<TechnicianTicketsViewProps> = ({
 
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
-      return (
+      const match =
         t.ticket_number.toLowerCase().includes(q) ||
         t.subject.toLowerCase().includes(q) ||
-        t.location_name.toLowerCase().includes(q)
-      );
+        t.location_name.toLowerCase().includes(q) ||
+        t.region_name.toLowerCase().includes(q) ||
+        t.assigned_technician_name.toLowerCase().includes(q);
+      if (!match) return false;
     }
+
+    if (statusFilter !== 'ALL' && t.status !== statusFilter) return false;
+    if (priorityFilter !== 'ALL' && t.priority !== priorityFilter) return false;
+    if (technicianFilter !== 'ALL' && t.assigned_technician_id !== technicianFilter) return false;
+    if (regionFilter !== 'ALL' && t.region_name !== regionFilter) return false;
+    if (branchFilter !== 'ALL' && t.location_id !== branchFilter) return false;
+
     return true;
   });
 
@@ -90,19 +124,26 @@ export const TechnicianTicketsView: React.FC<TechnicianTicketsViewProps> = ({
 
         <div className="flex items-center gap-2">
           {/* Operator selector for review */}
-          <select
-            value={selectedTechnicianId}
-            onChange={e => setSelectedTechnicianId(e.target.value)}
-            className="px-3 py-2 text-xs font-semibold rounded-lg bg-white border border-slate-200 text-slate-700 focus:outline-none"
-          >
-            <option value={currentUser.id}>Assigned to Me ({currentUser.name})</option>
-            <option value="ALL">All Technician Queues</option>
-            {users.map(u => (
-              <option key={u.id} value={u.id}>
-                {u.name} ({u.role})
-              </option>
-            ))}
-          </select>
+          {currentUser.role === 'TECHNICIAN' ? (
+            <div className="px-3 py-2 text-xs font-semibold rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 flex items-center gap-1.5">
+              <UserIcon className="w-3.5 h-3.5 text-emerald-600" />
+              <span>My Assigned & Generated Tickets ({currentUser.name})</span>
+            </div>
+          ) : (
+            <select
+              value={selectedTechnicianId}
+              onChange={e => setSelectedTechnicianId(e.target.value)}
+              className="px-3 py-2 text-xs font-semibold rounded-lg bg-white border border-slate-200 text-slate-700 focus:outline-none"
+            >
+              <option value={currentUser.id}>Assigned to Me ({currentUser.name})</option>
+              <option value="ALL">All Technician Queues</option>
+              {users.map(u => (
+                <option key={u.id} value={u.id}>
+                  {u.name} ({u.role})
+                </option>
+              ))}
+            </select>
+          )}
 
           <button
             onClick={() => window.print()}
@@ -308,7 +349,7 @@ export const TechnicianTicketsView: React.FC<TechnicianTicketsViewProps> = ({
             </button>
           </div>
 
-          <div className="flex items-center gap-2 flex-1 max-w-md">
+          <div className="flex items-center gap-2 flex-1 max-w-lg">
             <div className="relative flex-1">
               <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
               <input
@@ -319,8 +360,152 @@ export const TechnicianTicketsView: React.FC<TechnicianTicketsViewProps> = ({
                 className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:bg-white text-slate-800"
               />
             </div>
+
+            <select className="px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none">
+              <option>Quick Filter: All Views & Filters</option>
+              <option>My Assigned Tickets</option>
+              {slaEngineEnabled && <option>SLA At Risk</option>}
+              <option>Critical & High Priority</option>
+            </select>
+
+            <button
+              onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+              className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-900 text-white flex items-center gap-1.5 shrink-0"
+            >
+              <Filter className="w-3.5 h-3.5" />
+              <span>Filters</span>
+            </button>
           </div>
         </div>
+
+        {/* Row 2: Secondary Dropdown Filters (Matching Image) */}
+        {showAdvancedFilters && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3 pt-3 border-t border-slate-100">
+            {/* 1. STATUS */}
+            <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-2xs flex flex-col justify-between hover:border-slate-300 transition-colors">
+              <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                <ShieldAlert className="w-3.5 h-3.5 text-indigo-600" />
+                <span>STATUS</span>
+              </div>
+              <select
+                value={statusFilter}
+                onChange={e => setStatusFilter(e.target.value)}
+                className="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-800 font-semibold focus:outline-none focus:bg-white cursor-pointer"
+              >
+                <option value="ALL">All Statuses</option>
+                <option value="NEW">NEW</option>
+                <option value="OPEN">OPEN</option>
+                <option value="ASSIGNED">ASSIGNED</option>
+                <option value="ACKNOWLEDGED">ACKNOWLEDGED</option>
+                <option value="UNDER INVESTIGATION">UNDER INVESTIGATION</option>
+                <option value="IN PROGRESS">IN PROGRESS</option>
+                <option value="PENDING">PENDING</option>
+                <option value="RESOLVED">RESOLVED</option>
+                <option value="VERIFICATION">VERIFICATION</option>
+                <option value="CLOSED">CLOSED</option>
+                <option value="REOPENED">REOPENED</option>
+                <option value="ARCHIVED">ARCHIVED</option>
+              </select>
+            </div>
+
+            {/* 2. PRIORITY */}
+            <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-2xs flex flex-col justify-between hover:border-slate-300 transition-colors">
+              <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+                <span>PRIORITY</span>
+              </div>
+              <select
+                value={priorityFilter}
+                onChange={e => setPriorityFilter(e.target.value)}
+                className="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-800 font-semibold focus:outline-none focus:bg-white cursor-pointer"
+              >
+                <option value="ALL">All Priorities</option>
+                <option value="CRITICAL">CRITICAL</option>
+                <option value="HIGH">HIGH</option>
+                <option value="MEDIUM">MEDIUM</option>
+                <option value="LOW">LOW</option>
+              </select>
+            </div>
+
+            {/* 3. TECHNICIAN */}
+            <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-2xs flex flex-col justify-between hover:border-slate-300 transition-colors">
+              <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                <UserIcon className="w-3.5 h-3.5 text-emerald-600" />
+                <span>TECHNICIAN</span>
+              </div>
+              <select
+                value={technicianFilter}
+                onChange={e => setTechnicianFilter(e.target.value)}
+                className="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-800 font-semibold focus:outline-none focus:bg-white cursor-pointer"
+              >
+                <option value="ALL">All Technicians</option>
+                {users.map(u => (
+                  <option key={u.id} value={u.id}>
+                    {u.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* 4. REGION */}
+            <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-2xs flex flex-col justify-between hover:border-slate-300 transition-colors">
+              <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                <MapPin className="w-3.5 h-3.5 text-purple-600" />
+                <span>REGION</span>
+              </div>
+              <select
+                value={regionFilter}
+                onChange={e => setRegionFilter(e.target.value)}
+                className="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-800 font-semibold focus:outline-none focus:bg-white cursor-pointer"
+              >
+                <option value="ALL">All Regions</option>
+                {regions.map(r => (
+                  <option key={r.id} value={r.name.replace(' Region', '')}>
+                    {r.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* 5. BRANCH */}
+            <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-2xs flex flex-col justify-between hover:border-slate-300 transition-colors">
+              <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                <Building2 className="w-3.5 h-3.5 text-blue-600" />
+                <span>BRANCH</span>
+              </div>
+              <select
+                value={branchFilter}
+                onChange={e => setBranchFilter(e.target.value)}
+                className="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-800 font-semibold focus:outline-none focus:bg-white cursor-pointer"
+              >
+                <option value="ALL">All Branches ({locations.length})</option>
+                {locations.slice(0, 30).map(loc => (
+                  <option key={loc.id} value={loc.id}>
+                    {loc.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* 6. DATE RANGE */}
+            <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-2xs flex flex-col justify-between hover:border-slate-300 transition-colors">
+              <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                <Clock className="w-3.5 h-3.5 text-teal-600" />
+                <span>DATE RANGE</span>
+              </div>
+              <select
+                value={dateRangeFilter}
+                onChange={e => setDateRangeFilter(e.target.value)}
+                className="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-800 font-semibold focus:outline-none focus:bg-white cursor-pointer"
+              >
+                <option value="ALL">All Time</option>
+                <option value="TODAY">Today</option>
+                <option value="THIS_WEEK">This Week</option>
+                <option value="THIS_MONTH">This Month</option>
+              </select>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 4. Table (Matching Image 4) */}
@@ -337,7 +522,7 @@ export const TechnicianTicketsView: React.FC<TechnicianTicketsViewProps> = ({
                 <th className="py-3.5 px-4">SUBJECT / TITLE</th>
                 <th className="py-3.5 px-4">STATUS</th>
                 <th className="py-3.5 px-4">PRIORITY</th>
-                <th className="py-3.5 px-4">SLA STATUS</th>
+                {slaEngineEnabled && <th className="py-3.5 px-4">SLA STATUS</th>}
                 <th className="py-3.5 px-4">ASSIGNED TECHNICIAN</th>
                 <th className="py-3.5 px-4">LOCATION / SITE</th>
                 <th className="py-3.5 px-4 text-right">ACTIONS</th>
@@ -378,9 +563,11 @@ export const TechnicianTicketsView: React.FC<TechnicianTicketsViewProps> = ({
                         {ticket.priority}
                       </span>
                     </td>
-                    <td className="py-3.5 px-4">
-                      <span className="text-emerald-700 font-bold text-[10px]">● {ticket.sla_status}</span>
-                    </td>
+                    {slaEngineEnabled && (
+                      <td className="py-3.5 px-4">
+                        <span className="text-emerald-700 font-bold text-[10px]">● {ticket.sla_status}</span>
+                      </td>
+                    )}
                     <td className="py-3.5 px-4">
                       <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-700">
                         {ticket.assigned_technician_name}
