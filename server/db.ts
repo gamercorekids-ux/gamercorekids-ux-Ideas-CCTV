@@ -864,23 +864,23 @@ class DatabaseManager {
         console.log('[Database] Hostinger MySQL initial seeding completed.');
       } else {
         // Load existing records from MySQL
-        const [depts]: any = await this.pool.query("SELECT * FROM departments ORDER BY is_primary DESC, name ASC");
+        const [depts]: any = await this.pool.query("SELECT * FROM departments");
         if (depts && depts.length > 0) {
           this.departments = depts.map((d: any) => ({ ...d, is_primary: Boolean(d.is_primary) }));
         }
 
-        const [regs]: any = await this.pool.query("SELECT * FROM regions ORDER BY name ASC");
+        const [regs]: any = await this.pool.query("SELECT * FROM regions");
         if (regs && regs.length > 0) {
           this.regions = regs;
         }
 
-        const [locs]: any = await this.pool.query("SELECT * FROM locations ORDER BY name ASC");
+        const [locs]: any = await this.pool.query("SELECT * FROM locations");
         if (locs && locs.length > 0) {
           this.locations = locs;
         }
 
         const [usrs]: any = await this.pool.query(
-  "SELECT * FROM users ORDER BY name ASC"
+  "SELECT * FROM users"
 );
 
 if (usrs && usrs.length > 0) {
@@ -925,7 +925,7 @@ if (usrs && usrs.length > 0) {
   this.users = migratedUsers;
 }
 
-        const [tix]: any = await this.pool.query("SELECT * FROM tickets ORDER BY created_at DESC");
+        const [tix]: any = await this.pool.query("SELECT * FROM tickets");
         if (tix && tix.length > 0) {
           this.tickets = tix.map((t: any) => ({
             ...t,
@@ -1133,7 +1133,7 @@ if (usrs && usrs.length > 0) {
     );
   }
 
-  public addUser(user: User): User {
+  public async addUser(user: User): Promise<User> {
     const suppliedPassword = String(user.password_hash || '');
 
     const passwordHash =
@@ -1151,9 +1151,7 @@ if (usrs && usrs.length > 0) {
       password_hash: passwordHash
     };
 
-    this.users.push(storedUser);
-
-    this.runQuery(
+    await this.runQuery(
       "INSERT INTO users (id, name, email, password_hash, department_id, department_name, role, status, avatar_initials, workload_status, granular_rights) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE name=VALUES(name)",
       [
         storedUser.id,
@@ -1169,6 +1167,8 @@ if (usrs && usrs.length > 0) {
         JSON.stringify(storedUser.granular_rights)
       ]
     );
+
+    this.users.push(storedUser);
 
     return storedUser;
   }
